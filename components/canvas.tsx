@@ -17,7 +17,9 @@ const Canvas: FC<pageProps> = ({ roomId }) => {
   const [ws, setWs] = useState<WebSocket | null>(null);
 
   useEffect(() => {
-    const websocket = new WebSocket(`ws://localhost:8080?roomId=${roomId}`);
+    const websocket = new WebSocket(
+      `wss://drawapp-backend-gzkk.onrender.com?roomId=${roomId}`
+    );
 
     websocket.onopen = () => {
       console.log("Connected to WebSocket server");
