@@ -1,8 +1,9 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import Canvas from "@/components/canvas";
+import RoomCanvas from "@/components/room/room-canvas";
 import { RoomIdSchema } from "@/utils/schema";
 import { normalizeRoomId } from "@/lib/room";
+import { recordVisit } from "@/utils/rooms";
 
 export default async function RoomPage({ params }: { params: { roomId: string } }) {
   const parsed = RoomIdSchema.safeParse(decodeURIComponent(params.roomId));
@@ -17,6 +18,7 @@ export default async function RoomPage({ params }: { params: { roomId: string } 
     name: session?.user?.name ?? session?.user?.email ?? "Guest",
     image: session?.user?.image ?? null,
   };
+  if (user.id) await recordVisit(user.id, roomId);
 
-  return <Canvas roomId={roomId} user={user} />;
+  return <RoomCanvas roomId={roomId} user={user} />;
 }

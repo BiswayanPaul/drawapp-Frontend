@@ -1,5 +1,7 @@
 import { auth } from "@/auth";
 import RoomLauncher from "@/components/room-launcher";
+import RecentRooms from "@/components/recent-rooms";
+import { getRecentRooms } from "@/utils/rooms";
 import { Palette, Share2, Zap } from "lucide-react";
 
 const features = [
@@ -23,9 +25,10 @@ const features = [
 export default async function Home() {
   const session = await auth();
   const firstName = session?.user?.name?.split(" ")[0];
+  const recentRooms = session?.user?.id ? await getRecentRooms(session.user.id) : [];
 
   return (
-    <div className="bg-dots flex flex-1 items-center">
+    <div className="bg-dots flex flex-1 flex-col justify-center">
       <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-8 sm:py-14 lg:grid-cols-[1.1fr_1fr] lg:gap-x-12 lg:gap-y-10">
         <div className="lg:col-start-1 lg:row-start-1 lg:self-end">
           <p className="mb-3 text-sm font-medium text-primary">
@@ -60,6 +63,7 @@ export default async function Home() {
           ))}
         </ul>
       </div>
+      <RecentRooms rooms={recentRooms} />
     </div>
   );
 }

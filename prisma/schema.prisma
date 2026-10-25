@@ -23,3 +23,22 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// Drawings are written by the realtime server (drawapp-backend) as JSON.
+model Room {
+  id        String      @id
+  elements  Json        @default("[]")
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  visits    RoomVisit[]
+}
+
+model RoomVisit {
+  userId    String
+  roomId    String
+  visitedAt DateTime @default(now())
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roomId])
+  @@index([userId, visitedAt])
+}
