@@ -25,6 +25,7 @@ import { useRoomSocket } from "@/hooks/useRoomSocket";
 import { PeopleMenu, StatusBadge } from "./people-menu";
 import { COLORS, SIZES, TOOLS, Toolbar } from "./toolbar";
 import { RemoteCursor, RemoteCursors } from "./remote-cursors";
+import { PrivacyButton } from "./privacy-dialog";
 
 const MAX_QUEUED = 5000;
 const CURSOR_INTERVAL_MS = 40;
@@ -51,7 +52,19 @@ function constrain(from: Point, to: Point, kind: ShapeElement["kind"]): Point {
   return { x: from.x + Math.cos(angle) * length, y: from.y + Math.sin(angle) * length };
 }
 
-export default function RoomCanvas({ roomId, user }: { roomId: string; user: RoomUser }) {
+export default function RoomCanvas({
+  roomId,
+  user,
+  token,
+  isOwner,
+  isPrivate,
+}: {
+  roomId: string;
+  user: RoomUser;
+  token: string | null;
+  isOwner: boolean;
+  isPrivate: boolean;
+}) {
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -158,7 +171,10 @@ export default function RoomCanvas({ roomId, user }: { roomId: string; user: Roo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { status, send } = useRoomSocket(roomId, user, handleMessage);
+  // Access changed (password set or changed): reload so the server decides what we see.
+  const { status, send } = useRoomSocket(roomId, token, user, handleMessage, () =>
+    router.refresh()
+  );
 
   function emit(message: ClientMessage) {
     if (send(message)) return;
@@ -289,6 +305,12 @@ export default function RoomCanvas({ roomId, user }: { roomId: string; user: Roo
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (e.button !== 0) return;
     const point = toCanvasPoint(e);
+
+    if (tool === "fill") {
+      commit({ id: newId(), kind: "fill", at: point, color, size: 1 });
+      render();
+      return;
+    }
 
     if (tool === "text") {
       e.preventDefault();
@@ -423,6 +445,7 @@ export default function RoomCanvas({ roomId, user }: { roomId: string; user: Roo
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <PrivacyButton roomId={roomId} isOwner={isOwner} isPrivate={isPrivate} />
           <PeopleMenu members={members} fallbackCount={peers} me={user} />
           <StatusBadge status={status} />
           <button
@@ -448,7 +471,13 @@ export default function RoomCanvas({ roomId, user }: { roomId: string; user: Roo
           onPointerLeave={() => send({ type: "cursor", x: -1, y: -1 })}
           className={cn(
             "h-auto max-h-[calc(100dvh-13.5rem)] w-auto max-w-full touch-none rounded-xl bg-white shadow-lg ring-1 ring-border dark:shadow-black/40",
-            tool === "text" ? "cursor-text" : tool === "eraser" ? "cursor-cell" : "cursor-crosshair"
+            tool === "text"
+              ? "cursor-text"
+              : tool === "eraser"
+                ? "cursor-cell"
+                : tool === "fill"
+                  ? "cursor-copy"
+                  : "cursor-crosshair"
           )}
         />
         {box && (

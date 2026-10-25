@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { Clock } from "lucide-react";
+import { Clock, Lock } from "lucide-react";
 
 type RecentRoom = {
   id: string;
   visitedAt: Date;
-  elementCount: number;
+  isPrivate: boolean;
   thumbnail: string;
 };
 
@@ -45,8 +45,11 @@ export default function RecentRooms({ rooms }: { rooms: RecentRoom[] }) {
                 className="aspect-[16/10] w-full border-b bg-white object-cover"
               />
               <div className="px-3 py-2">
-                <p className="font-mono text-sm font-semibold tracking-widest group-hover:text-primary">
+                <p className="flex items-center gap-1.5 font-mono text-sm font-semibold tracking-widest group-hover:text-primary">
                   {room.id}
+                  {room.isPrivate && (
+                    <Lock className="size-3.5 text-muted-foreground" aria-label="Private" />
+                  )}
                 </p>
                 <p className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock className="size-3" />

@@ -14,7 +14,8 @@ export type Tool =
   | "arrow"
   | "rect"
   | "ellipse"
-  | "text";
+  | "text"
+  | "fill";
 
 type Base = { id: string; color: string; size: number };
 
@@ -29,7 +30,8 @@ export type ShapeElement = Base & {
   to: Point;
 };
 export type TextElement = Base & { kind: "text"; at: Point; text: string };
-export type DrawElement = StrokeElement | ShapeElement | TextElement;
+export type FillElement = Base & { kind: "fill"; at: Point };
+export type DrawElement = StrokeElement | ShapeElement | TextElement | FillElement;
 
 export type RoomUser = { id: string; name: string; image: string | null };
 
@@ -152,18 +154,125 @@ export function drawElement(ctx: CanvasRenderingContext2D, el: DrawElement) {
       ctx.fillText(el.text, el.at.x, el.at.y);
       break;
     }
+    case "fill": {
+      floodFill(ctx, el.at, el.color);
+      break;
+    }
   }
   ctx.restore();
 }
+
+// Pixels whose RGBA channels differ from the clicked colour by at most this (summed)
+// still get filled, so anti-aliased line edges don't leave a halo.
+const FILL_TOLERANCE = 120;
+
+function parseColor(ctx: CanvasRenderingContext2D, color: string) {
+  ctx.fillStyle = "#000";
+  ctx.fillStyle = color; // the canvas normalises any CSS colour to #rrggbb
+  const hex = String(ctx.fillStyle).replace("#", "");
+  const n = parseInt(hex.slice(0, 6), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 255];
+}
+
+// Scanline flood fill over the pixels rendered so far.
+function floodFill(ctx: CanvasRenderingContext2D, at: Point, color: string) {
+  const W = CANVAS_WIDTH;
+  const H = CANVAS_HEIGHT;
+  const x0 = Math.floor(at.x);
+  const y0 = Math.floor(at.y);
+  if (x0 < 0 || y0 < 0 || x0 >= W || y0 >= H) return;
+
+  const image = ctx.getImageData(0, 0, W, H);
+  const data = image.data;
+  const start = (y0 * W + x0) * 4;
+  const target = [data[start], data[start + 1], data[start + 2], data[start + 3]];
+  const fill = parseColor(ctx, color);
+  if (target.every((v, i) => Math.abs(v - fill[i]) < 3)) return;
+
+  const done = new Uint8Array(W * H);
+  const matches = (x: number, y: number) => {
+    const p = y * W + x;
+    if (done[p]) return false;
+    const i = p * 4;
+    return (
+      Math.abs(data[i] - target[0]) +
+        Math.abs(data[i + 1] - target[1]) +
+        Math.abs(data[i + 2] - target[2]) +
+        Math.abs(data[i + 3] - target[3]) <=
+      FILL_TOLERANCE
+    );
+  };
+
+  const stack = [x0, y0];
+  while (stack.length) {
+    const y = stack.pop()!;
+    const x = stack.pop()!;
+    if (!matches(x, y)) continue;
+    let left = x;
+    while (left > 0 && matches(left - 1, y)) left--;
+    let right = x;
+    while (right < W - 1 && matches(right + 1, y)) right++;
+    for (let cx = left; cx <= right; cx++) {
+      const p = y * W + cx;
+      done[p] = 1;
+      data.set(fill, p * 4);
+    }
+    // Seed the rows above and below once per contiguous run.
+    for (const ny of [y - 1, y + 1]) {
+      if (ny < 0 || ny >= H) continue;
+      let inRun = false;
+      for (let cx = left; cx <= right; cx++) {
+        const ok = matches(cx, ny);
+        if (ok && !inRun) stack.push(cx, ny);
+        inRun = ok;
+      }
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+}
+
+// Flood fills read pixels, so they're slow; keep a snapshot of everything up to the
+// last fill and only redraw what came after it.
+const fillCache = new WeakMap<
+  CanvasRenderingContext2D,
+  { key: string; snapshot: HTMLCanvasElement }
+>();
 
 export function renderScene(
   ctx: CanvasRenderingContext2D,
   elements: Iterable<DrawElement>,
   preview?: DrawElement | null
 ) {
+  const list = Array.from(elements);
+  let lastFill = -1;
+  list.forEach((el, i) => {
+    if (el.kind === "fill") lastFill = i;
+  });
+
   ctx.fillStyle = CANVAS_BACKGROUND;
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  Array.from(elements).forEach((el) => drawElement(ctx, el));
+
+  if (lastFill >= 0) {
+    let points = 0;
+    for (let i = 0; i <= lastFill; i++) {
+      const el = list[i];
+      if (el.kind === "stroke") points += el.points.length;
+    }
+    const key = `${lastFill}:${list[0].id}:${list[lastFill].id}:${points}`;
+    const cached = fillCache.get(ctx);
+    if (cached?.key === key) {
+      ctx.drawImage(cached.snapshot, 0, 0);
+    } else {
+      for (let i = 0; i <= lastFill; i++) drawElement(ctx, list[i]);
+      const snapshot = cached?.snapshot ?? document.createElement("canvas");
+      snapshot.width = CANVAS_WIDTH;
+      snapshot.height = CANVAS_HEIGHT;
+      snapshot.getContext("2d")?.drawImage(ctx.canvas, 0, 0);
+      fillCache.set(ctx, { key, snapshot });
+    }
+  }
+
+  for (let i = lastFill + 1; i < list.length; i++) drawElement(ctx, list[i]);
   if (preview) drawElement(ctx, preview);
 }
 
@@ -196,6 +305,9 @@ export function elementsToSvg(elements: DrawElement[]) {
           return `<ellipse cx="${(el.from.x + el.to.x) / 2}" cy="${(el.from.y + el.to.y) / 2}" rx="${Math.abs(el.to.x - el.from.x) / 2}" ry="${Math.abs(el.to.y - el.from.y) / 2}" ${common}/>`;
         case "text":
           return `<text x="${el.at.x}" y="${el.at.y}" dominant-baseline="hanging" font-family="${FONT_FAMILY}" font-weight="600" font-size="${textFontSize(el.size)}" fill="${escapeXml(el.color)}">${escapeXml(el.text)}</text>`;
+        case "fill":
+          // Flood fills depend on rendered pixels; thumbnails skip them.
+          return "";
       }
     })
     .join("");

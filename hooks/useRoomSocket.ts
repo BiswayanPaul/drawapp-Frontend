@@ -4,21 +4,28 @@ import type { ClientMessage, RoomUser, ServerMessage } from "@/lib/drawing";
 export const WS_URL =
   process.env.NEXT_PUBLIC_WS_URL ?? "wss://drawapp-backend-gzkk.onrender.com";
 
-export type SocketStatus = "connecting" | "open" | "reconnecting";
+export type SocketStatus = "connecting" | "open" | "reconnecting" | "denied";
+
+// Close code the realtime server uses when a room token is invalid or revoked.
+const ACCESS_REVOKED = 4003;
 
 export function useRoomSocket(
   roomId: string,
+  token: string | null,
   user: RoomUser,
-  onMessage: (message: ServerMessage) => void
+  onMessage: (message: ServerMessage) => void,
+  onDenied: () => void
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const onMessageRef = useRef(onMessage);
   const userRef = useRef(user);
+  const onDeniedRef = useRef(onDenied);
   const [status, setStatus] = useState<SocketStatus>("connecting");
 
   useEffect(() => {
     onMessageRef.current = onMessage;
     userRef.current = user;
+    onDeniedRef.current = onDenied;
   });
 
   useEffect(() => {
@@ -27,9 +34,9 @@ export function useRoomSocket(
     let disposed = false;
 
     const connect = () => {
-      const ws = new WebSocket(
-        `${WS_URL}?roomId=${encodeURIComponent(roomId)}`
-      );
+      const params = new URLSearchParams({ roomId });
+      if (token) params.set("token", token);
+      const ws = new WebSocket(`${WS_URL}?${params}`);
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -44,8 +51,14 @@ export function useRoomSocket(
           console.error("Bad message from server", error);
         }
       };
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         if (disposed) return;
+        if (event.code === ACCESS_REVOKED) {
+          // Retrying with the same token won't help; the page fetches a new one.
+          setStatus("denied");
+          onDeniedRef.current();
+          return;
+        }
         setStatus("reconnecting");
         // Render's free tier sleeps; back off while it wakes up.
         retryTimer = setTimeout(connect, Math.min(1000 * 2 ** attempt++, 10000));
@@ -58,7 +71,7 @@ export function useRoomSocket(
       clearTimeout(retryTimer);
       wsRef.current?.close();
     };
-  }, [roomId]);
+  }, [roomId, token]);
 
   const send = useCallback((message: ClientMessage) => {
     const ws = wsRef.current;

@@ -85,6 +85,7 @@ export function StatusBadge({ status }: { status: SocketStatus }) {
     open: { label: "Live", dot: "bg-green-500" },
     connecting: { label: "Connecting…", dot: "bg-amber-400 animate-pulse" },
     reconnecting: { label: "Reconnecting…", dot: "bg-amber-400 animate-pulse" },
+    denied: { label: "No access", dot: "bg-red-500" },
   }[status];
 
   return (
@@ -93,7 +94,9 @@ export function StatusBadge({ status }: { status: SocketStatus }) {
       title={
         status === "open"
           ? "Connected to the drawing server"
-          : "The server may take up to a minute to wake up"
+          : status === "denied"
+            ? "Your access to this room changed"
+            : "The server may take up to a minute to wake up"
       }
     >
       <span className={cn("size-2 rounded-full", config.dot)} />

@@ -26,11 +26,16 @@ model User {
 
 // Drawings are written by the realtime server (drawapp-backend) as JSON.
 model Room {
-  id        String      @id
-  elements  Json        @default("[]")
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  visits    RoomVisit[]
+  id            String      @id
+  elements      Json        @default("[]")
+  ownerId       String?
+  // bcrypt hash; null means anyone signed in can join.
+  passwordHash  String?
+  // Bumped whenever the password changes so previously issued room tokens stop working.
+  accessVersion Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  visits        RoomVisit[]
 }
 
 model RoomVisit {

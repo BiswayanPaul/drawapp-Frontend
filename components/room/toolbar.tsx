@@ -7,6 +7,7 @@ import {
   Eraser,
   Highlighter,
   Minus,
+  PaintBucket,
   Pencil,
   Redo2,
   Square,
@@ -38,6 +39,7 @@ export const TOOLS: { tool: Tool; label: string; key: string; icon: typeof Penci
   { tool: "rect", label: "Rectangle", key: "r", icon: Square },
   { tool: "ellipse", label: "Ellipse", key: "o", icon: Circle },
   { tool: "text", label: "Text", key: "t", icon: Type },
+  { tool: "fill", label: "Fill", key: "f", icon: PaintBucket },
 ];
 
 type ToolbarProps = {

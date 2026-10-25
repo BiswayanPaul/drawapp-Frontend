@@ -19,3 +19,8 @@ export const RoomIdSchema = z
   .regex(/^[a-zA-Z0-9]{4,12}$/, {
     message: "Room codes are 4–12 letters or numbers",
   });
+
+export const RoomPasswordSchema = z
+  .string()
+  .min(4, { message: "Use at least 4 characters" })
+  .max(64, { message: "Keep it under 64 characters" });
