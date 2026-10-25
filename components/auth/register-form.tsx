@@ -41,9 +41,9 @@ export function RegisterForm() {
   const pending = form.formState.isSubmitting;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/60">
-      <h1 className="text-2xl font-bold text-slate-900">Create your account</h1>
-      <p className="mb-6 mt-1 text-sm text-slate-500">
+    <div className="rounded-2xl border bg-card p-6 shadow-xl shadow-slate-200/60 sm:p-8 dark:shadow-black/30">
+      <h1 className="text-2xl font-bold">Create your account</h1>
+      <p className="mb-6 mt-1 text-sm text-muted-foreground">
         It takes ten seconds. Then start drawing.
       </p>
 
@@ -117,7 +117,7 @@ export function RegisterForm() {
         </form>
       </Form>
 
-      <p className="mt-6 text-center text-sm text-slate-500">
+      <p className="mt-6 text-center text-sm text-muted-foreground">
         Already have an account?{" "}
         <Link href="/signin" className="font-medium text-primary hover:underline">
           Sign in

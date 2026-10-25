@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ClientMessage, ServerMessage } from "@/lib/drawing";
+import type { ClientMessage, RoomUser, ServerMessage } from "@/lib/drawing";
 
 export const WS_URL =
   process.env.NEXT_PUBLIC_WS_URL ?? "wss://drawapp-backend-gzkk.onrender.com";
@@ -8,14 +8,17 @@ export type SocketStatus = "connecting" | "open" | "reconnecting";
 
 export function useRoomSocket(
   roomId: string,
+  user: RoomUser,
   onMessage: (message: ServerMessage) => void
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const onMessageRef = useRef(onMessage);
+  const userRef = useRef(user);
   const [status, setStatus] = useState<SocketStatus>("connecting");
 
   useEffect(() => {
     onMessageRef.current = onMessage;
+    userRef.current = user;
   });
 
   useEffect(() => {
@@ -32,6 +35,7 @@ export function useRoomSocket(
       ws.onopen = () => {
         attempt = 0;
         setStatus("open");
+        ws.send(JSON.stringify({ type: "join", user: userRef.current }));
       };
       ws.onmessage = (event) => {
         try {

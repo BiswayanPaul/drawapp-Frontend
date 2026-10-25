@@ -13,14 +13,26 @@ export type Segment = {
   size: number;
 };
 
+export type RoomUser = { id: string; name: string; image: string | null };
+
+export type Member = {
+  connectionId: string;
+  userId: string | null;
+  name: string;
+  image: string | null;
+};
+
 export type ServerMessage =
   | { type: "draw"; segment: Segment }
   | { type: "clear" }
   | { type: "history"; segments: Segment[] }
-  | { type: "presence"; count: number }
+  | { type: "presence"; count: number; users?: Member[] }
   | { type: "info"; message: string };
 
-export type ClientMessage = { type: "draw"; segment: Segment } | { type: "clear" };
+export type ClientMessage =
+  | { type: "draw"; segment: Segment }
+  | { type: "clear" }
+  | { type: "join"; user: RoomUser };
 
 export function drawSegment(ctx: CanvasRenderingContext2D, segment: Segment) {
   ctx.strokeStyle = segment.color;

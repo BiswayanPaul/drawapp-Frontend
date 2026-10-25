@@ -2,6 +2,7 @@ import Image from "next/image";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import paintBrush from "@/app/fonts/paintbrush.png";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 
 export default async function AuthLayout({
   children,
@@ -12,7 +13,7 @@ export default async function AuthLayout({
   if (session?.user) redirect("/");
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
+    <div className="grid min-h-dvh lg:grid-cols-2">
       <aside className="relative hidden overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-500 p-12 text-white lg:flex lg:flex-col lg:justify-between">
         <div className="flex items-center gap-3 text-lg font-semibold">
           <Image src={paintBrush} alt="" width={36} height={36} />
@@ -42,8 +43,17 @@ export default async function AuthLayout({
           </p>
         </div>
       </aside>
-      <section className="flex items-center justify-center bg-slate-50 px-4 py-12">
-        <div className="w-full max-w-md">{children}</div>
+      <section className="relative flex flex-col bg-background px-4 py-6 sm:px-6">
+        <div className="flex items-center justify-between lg:justify-end">
+          <div className="flex items-center gap-2.5 font-semibold lg:hidden">
+            <Image src={paintBrush} alt="" width={28} height={28} />
+            DrawApp
+          </div>
+          <ThemeToggle />
+        </div>
+        <div className="flex flex-1 items-center justify-center py-8">
+          <div className="w-full max-w-md">{children}</div>
+        </div>
       </section>
     </div>
   );

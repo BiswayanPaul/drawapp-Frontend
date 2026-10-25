@@ -5,7 +5,7 @@ export function FormError({ message }: { message?: string }) {
   return (
     <div
       role="alert"
-      className="mb-5 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
+      className="mb-5 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300"
     >
       <AlertCircle className="mt-0.5 size-4 shrink-0" />
       <span>{message}</span>

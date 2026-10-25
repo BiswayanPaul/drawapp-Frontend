@@ -13,7 +13,7 @@ function SubmitButton() {
       type="submit"
       variant="outline"
       disabled={pending}
-      className="h-11 w-full gap-2 bg-white text-slate-800"
+      className="h-11 w-full gap-2 bg-card"
     >
       {pending ? (
         <Loader2 className="size-4 animate-spin" />
@@ -35,9 +35,9 @@ export function GoogleButton() {
 
 export function OrDivider() {
   return (
-    <div className="relative my-6 text-center text-xs uppercase tracking-wider text-slate-400">
-      <span className="absolute inset-x-0 top-1/2 h-px bg-slate-200" />
-      <span className="relative bg-white px-3">or</span>
+    <div className="relative my-6 text-center text-xs uppercase tracking-wider text-muted-foreground">
+      <span className="absolute inset-x-0 top-1/2 h-px bg-border" />
+      <span className="relative bg-card px-3">or</span>
     </div>
   );
 }
