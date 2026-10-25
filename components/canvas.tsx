@@ -1,153 +1,368 @@
 "use client";
 
-import { useDraw } from "@/hooks/useDraw";
-import { FC, useEffect, useState } from "react";
-import { ChromePicker } from "react-color";
-import { Button } from "./ui/button";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { FC, useCallback, useEffect, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  Check,
+  Download,
+  Eraser,
+  Link2,
+  Paintbrush,
+  Trash2,
+  Users,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  CANVAS_BACKGROUND,
+  CANVAS_HEIGHT,
+  CANVAS_WIDTH,
+  Point,
+  Segment,
+  ServerMessage,
+  clearCanvas,
+  drawSegment,
+  isValidSegment,
+} from "@/lib/drawing";
+import { SocketStatus, useRoomSocket } from "@/hooks/useRoomSocket";
 
-interface pageProps {
-  roomId: string; // Add roomId as a prop
+const COLORS = [
+  "#0f172a",
+  "#ef4444",
+  "#f97316",
+  "#eab308",
+  "#22c55e",
+  "#3b82f6",
+  "#8b5cf6",
+  "#ec4899",
+];
+const SIZES = [4, 10, 24];
+const MAX_QUEUED = 5000;
+
+interface CanvasProps {
+  roomId: string;
 }
 
-const Canvas: FC<pageProps> = ({ roomId }) => {
-  const [color, setColor] = useState<string>("red");
-  const { canvasRef, onMouseDown, clear } = useDraw(drawLine);
-  const router = useRouter();
-  const [ws, setWs] = useState<WebSocket | null>(null);
+const Canvas: FC<CanvasProps> = ({ roomId }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const prevPoint = useRef<Point | null>(null);
+  // Strokes drawn while offline; sent once the server hands us its history.
+  const pending = useRef<Segment[]>([]);
 
-  useEffect(() => {
-    const websocket = new WebSocket(
-      `wss://drawapp-backend-gzkk.onrender.com?roomId=${roomId}`
-    );
+  const [color, setColor] = useState(COLORS[0]);
+  const [size, setSize] = useState(SIZES[0]);
+  const [erasing, setErasing] = useState(false);
+  const [peers, setPeers] = useState(1);
+  const [copied, setCopied] = useState(false);
 
-    websocket.onopen = () => {
-      console.log("Connected to WebSocket server");
-    };
+  const getCtx = () => canvasRef.current?.getContext("2d") ?? null;
 
-    websocket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === "draw") {
-        drawLineFromData(data);
-      } else if (data.type === "clear") {
-        clear(); // Clear canvas for all users
-      }
-    };
-
-    setWs(websocket);
-
-    return () => {
-      websocket.close();
-    };
-  }, [roomId]); // Only depend on roomId
-
-  function drawLine({ prevPoint, currentPoint, ctx }: Draw) {
-    const { x: currX, y: currY } = currentPoint;
-    const lineColor = color;
-    const lineWidth = 5;
-
-    const startPoint = prevPoint ?? currentPoint;
-    ctx.beginPath();
-    ctx.lineWidth = lineWidth;
-    ctx.strokeStyle = lineColor;
-    ctx.moveTo(startPoint.x, startPoint.y);
-    ctx.lineTo(currX, currY);
-    ctx.stroke();
-
-    ctx.fillStyle = lineColor;
-    ctx.beginPath();
-    ctx.arc(startPoint.x, startPoint.y, 2, 0, 2 * Math.PI);
-    ctx.fill();
-
-    // Send drawing data to the WebSocket server
-    if (ws) {
-      ws.send(
-        JSON.stringify({ type: "draw", startPoint, currX, currY, lineColor })
-      );
-    }
-  }
-
-  // Function to draw received data
-  function drawLineFromData(data: {
-    type: string;
-    lineColor: string;
-    startPoint: Point;
-    currX: number;
-    currY: number;
-  }) {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext("2d");
+  const handleMessage = useCallback((message: ServerMessage) => {
+    const ctx = getCtx();
     if (!ctx) return;
 
-    ctx.beginPath();
-    ctx.lineWidth = 5;
-    ctx.strokeStyle = data.lineColor;
-    ctx.moveTo(data.startPoint.x, data.startPoint.y);
-    ctx.lineTo(data.currX, data.currY);
-    ctx.stroke();
+    switch (message.type) {
+      case "draw":
+        if (isValidSegment(message.segment)) drawSegment(ctx, message.segment);
+        break;
+      case "clear":
+        clearCanvas(ctx);
+        break;
+      case "history":
+        clearCanvas(ctx);
+        message.segments.filter(isValidSegment).forEach((s) => drawSegment(ctx, s));
+        flushPending();
+        break;
+      case "info":
+        // Older servers don't send history; flush on their greeting instead.
+        flushPending();
+        break;
+      case "presence":
+        setPeers(message.count);
+        break;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    ctx.fillStyle = data.lineColor;
-    ctx.beginPath();
-    ctx.arc(data.startPoint.x, data.startPoint.y, 2, 0, 2 * Math.PI);
-    ctx.fill();
+  const { status, send } = useRoomSocket(roomId, handleMessage);
+
+  function flushPending() {
+    const ctx = getCtx();
+    const queued = pending.current;
+    pending.current = [];
+    queued.forEach((segment) => {
+      if (ctx) drawSegment(ctx, segment);
+      if (!send({ type: "draw", segment })) pending.current.push(segment);
+    });
   }
 
-  const handleClear = () => {
-    // Send clear command to the WebSocket server
-    if (ws) {
-      ws.send(JSON.stringify({ type: "clear" }));
-    }
-    clear(); // Clear local canvas
+  useEffect(() => {
+    const ctx = getCtx();
+    if (ctx) clearCanvas(ctx);
+  }, []);
+
+  const toCanvasPoint = (e: React.PointerEvent<HTMLCanvasElement>): Point => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return {
+      x: Math.round(((e.clientX - rect.left) / rect.width) * CANVAS_WIDTH * 10) / 10,
+      y: Math.round(((e.clientY - rect.top) / rect.height) * CANVAS_HEIGHT * 10) / 10,
+    };
   };
 
-  const handleLeaveRoom = () => {
-    if (ws) {
-      ws.close(); // Close the WebSocket connection
+  const emit = (from: Point, to: Point) => {
+    const ctx = getCtx();
+    if (!ctx) return;
+    const segment: Segment = {
+      from,
+      to,
+      color: erasing ? CANVAS_BACKGROUND : color,
+      size: erasing ? size * 2.5 : size,
+    };
+    drawSegment(ctx, segment);
+    if (!send({ type: "draw", segment }) && pending.current.length < MAX_QUEUED) {
+      pending.current.push(segment);
     }
-    router.push("/"); // Redirect to the home page or another appropriate page
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.button !== 0) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const point = toCanvasPoint(e);
+    prevPoint.current = point;
+    emit(point, point);
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!prevPoint.current) return;
+    const point = toCanvasPoint(e);
+    emit(prevPoint.current, point);
+    prevPoint.current = point;
+  };
+
+  const onPointerUp = () => {
+    prevPoint.current = null;
+  };
+
+  const handleClear = () => {
+    if (!window.confirm("Clear the canvas for everyone in this room?")) return;
+    const ctx = getCtx();
+    if (ctx) clearCanvas(ctx);
+    pending.current = [];
+    send({ type: "clear" });
+  };
+
+  const handleDownload = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const link = document.createElement("a");
+    link.download = `drawapp-${roomId}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  };
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt("Copy this link:", window.location.href);
+    }
   };
 
   return (
-    <div className="flex flex-col md:flex-row justify-center items-center min-h-screen bg-gradient-to-r from-blue-200 to-purple-300 p-10">
-      <div className="flex flex-col gap-5 p-6 bg-white rounded-lg shadow-lg transition-transform transform hover:scale-105 duration-200 w-full max-w-xs">
-        <h2 className="text-xl font-semibold text-center text-gray-700">
-          Room ID
-        </h2>
-        <div className="flex justify-center mb-4">
-          <span className="bg-purple-600 text-white text-lg font-bold py-2 px-4 rounded-lg shadow-md">
-            {roomId}
-          </span>
+    <div className="bg-dots flex flex-1 flex-col bg-slate-100">
+      {/* Room bar */}
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Link
+            href="/"
+            className="inline-flex size-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-white hover:text-slate-900"
+            aria-label="Leave room"
+          >
+            <ArrowLeft className="size-5" />
+          </Link>
+          <div className="flex items-center rounded-lg border border-slate-200 bg-white shadow-sm">
+            <span className="px-3 text-xs font-medium uppercase tracking-wider text-slate-400">
+              Room
+            </span>
+            <span className="border-l border-slate-200 px-3 py-1.5 font-mono text-sm font-semibold tracking-[0.2em] text-slate-900">
+              {roomId}
+            </span>
+            <button
+              onClick={handleCopyLink}
+              className="flex items-center gap-1.5 border-l border-slate-200 px-3 py-1.5 text-sm text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+            >
+              {copied ? (
+                <Check className="size-4 text-green-600" />
+              ) : (
+                <Link2 className="size-4" />
+              )}
+              <span className="hidden sm:inline">{copied ? "Copied" : "Invite"}</span>
+            </button>
+          </div>
         </div>
-        <ChromePicker color={color} onChange={(e) => setColor(e.hex)} />
-        <Button
-          variant="outline"
-          className="w-full border-gray-300 hover:border-gray-500 transition duration-200"
-          type="button"
-          onClick={handleClear}
-        >
-          Clear Canvas
-        </Button>
-        <Button
-          variant="outline"
-          className="w-full border-red-300 hover:border-red-500 transition duration-200 mt-4"
-          type="button"
-          onClick={handleLeaveRoom}
-        >
-          Leave Room
-        </Button>
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 shadow-sm">
+            <Users className="size-4" />
+            {peers}
+          </span>
+          <StatusBadge status={status} />
+        </div>
       </div>
 
-      <canvas
-        onMouseDown={onMouseDown}
-        ref={canvasRef}
-        width={750}
-        height={750}
-        className="md:flex hidden bg-white border border-gray-300 rounded-md shadow-md transition-transform transform hover:shadow-xl duration-200 ml-8"
-      />
+      {/* Board */}
+      <div className="flex flex-1 items-start justify-center px-4">
+        <canvas
+          ref={canvasRef}
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          className={cn(
+            "h-auto max-h-[calc(100vh-12.5rem)] w-auto max-w-full touch-none rounded-xl bg-white shadow-lg ring-1 ring-slate-200",
+            erasing ? "cursor-cell" : "cursor-crosshair"
+          )}
+        />
+      </div>
+
+      {/* Toolbar */}
+      <div className="sticky bottom-0 flex justify-center px-4 py-4">
+        <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-xl backdrop-blur">
+          <ToolButton
+            label="Brush"
+            active={!erasing}
+            onClick={() => setErasing(false)}
+          >
+            <Paintbrush className="size-5" />
+          </ToolButton>
+          <ToolButton
+            label="Eraser"
+            active={erasing}
+            onClick={() => setErasing(true)}
+          >
+            <Eraser className="size-5" />
+          </ToolButton>
+
+          <Divider />
+
+          {COLORS.map((c) => (
+            <button
+              key={c}
+              aria-label={`Color ${c}`}
+              onClick={() => {
+                setColor(c);
+                setErasing(false);
+              }}
+              className={cn(
+                "size-7 shrink-0 rounded-full ring-offset-2 transition hover:scale-110",
+                color === c && !erasing && "ring-2 ring-slate-900"
+              )}
+              style={{ backgroundColor: c }}
+            />
+          ))}
+          <label
+            className="relative size-7 shrink-0 cursor-pointer overflow-hidden rounded-full bg-[conic-gradient(red,yellow,lime,cyan,blue,magenta,red)] transition hover:scale-110"
+            title="Custom color"
+          >
+            <input
+              type="color"
+              value={color}
+              onChange={(e) => {
+                setColor(e.target.value);
+                setErasing(false);
+              }}
+              className="absolute inset-0 cursor-pointer opacity-0"
+            />
+          </label>
+
+          <Divider />
+
+          {SIZES.map((s) => (
+            <ToolButton
+              key={s}
+              label={`Brush size ${s}`}
+              active={size === s}
+              onClick={() => setSize(s)}
+            >
+              <span
+                className="rounded-full bg-slate-800"
+                style={{ width: 4 + s / 2, height: 4 + s / 2 }}
+              />
+            </ToolButton>
+          ))}
+
+          <Divider />
+
+          <ToolButton label="Download PNG" onClick={handleDownload}>
+            <Download className="size-5" />
+          </ToolButton>
+          <ToolButton label="Clear canvas" onClick={handleClear} danger>
+            <Trash2 className="size-5" />
+          </ToolButton>
+        </div>
+      </div>
     </div>
   );
 };
+
+function ToolButton({
+  label,
+  active,
+  danger,
+  onClick,
+  children,
+}: {
+  label: string;
+  active?: boolean;
+  danger?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "inline-flex size-10 shrink-0 items-center justify-center rounded-xl text-slate-600 transition",
+        active ? "bg-indigo-100 text-indigo-700" : "hover:bg-slate-100",
+        danger && "hover:bg-red-50 hover:text-red-600"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Divider() {
+  return <span className="mx-1 h-6 w-px shrink-0 bg-slate-200" />;
+}
+
+function StatusBadge({ status }: { status: SocketStatus }) {
+  const config = {
+    open: { label: "Live", dot: "bg-green-500" },
+    connecting: { label: "Connecting…", dot: "bg-amber-400 animate-pulse" },
+    reconnecting: { label: "Reconnecting…", dot: "bg-amber-400 animate-pulse" },
+  }[status];
+
+  return (
+    <span
+      className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 shadow-sm"
+      title={
+        status === "open"
+          ? "Connected to the drawing server"
+          : "The server may take up to a minute to wake up"
+      }
+    >
+      <span className={cn("size-2 rounded-full", config.dot)} />
+      {config.label}
+    </span>
+  );
+}
 
 export default Canvas;

@@ -9,8 +9,8 @@
     --card-foreground: 0 0% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
+    --primary: 243 75% 59%;
+    --primary-foreground: 0 0% 100%;
     --secondary: 0 0% 96.1%;
     --secondary-foreground: 0 0% 9%;
     --muted: 0 0% 96.1%;
@@ -21,7 +21,7 @@
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 89.8%;
     --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
+    --ring: 243 75% 59%;
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
@@ -65,124 +65,12 @@
   }
 }
 
-.pageWrapper {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-  background: linear-gradient(135deg, #e0f7fa 0%, #f0f4c3 100%);
-  padding: 5%;
-}
-
-.contentWrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 30px;
-  width: 30%;
-  padding: 2%;
-}
-
-.card {
-  background-color: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  padding: 30px;
-  transition: all 0.3s ease;
-  text-align: center;
-}
-
-.card:hover {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-  transform: translateY(-3px);
-}
-
-.cardTitle {
-  font-size: 1.5rem;
-  font-weight: bold;
-  margin-bottom: 20px;
-  color: #333;
-}
-
-.actionButton {
-  width: 100%;
-  padding: 15px;
-  font-size: 1rem;
-  border-radius: 8px;
-  transition: background 0.3s ease, box-shadow 0.3s ease;
-}
-
-.createButton {
-  background: linear-gradient(45deg, #42a5f5, #64b5f6);
-  color: #fff;
-}
-
-.createButton:hover {
-  background: linear-gradient(45deg, #2196f3, #42a5f5);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-.joinButton {
-  background: linear-gradient(45deg, #66bb6a, #81c784);
-  color: #fff;
-}
-
-.joinButton:hover {
-  background: linear-gradient(45deg, #43a047, #66bb6a);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-.popupContent {
-  backdrop-filter: blur(8px);
-  background-color: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border-radius: 10px;
-  padding: 40px;
-}
-
-.popupWrapper {
-  text-align: center;
-}
-
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.input {
-  padding: 10px;
-  font-size: 1rem;
-  border: 2px solid #ccc;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-.input:focus {
-  border-color: #4caf50;
-  box-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
-}
-
-.submitButton {
-  background: #4caf50;
-  color: white;
-  padding: 10px;
-  font-size: 1rem;
-  border-radius: 8px;
-}
-
-.submitButton:hover {
-  background: #388e3c;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-  .contentWrapper {
-    width: 90%;
-  }
-
-  .card {
-    padding: 20px;
+@layer utilities {
+  .bg-dots {
+    background-image: radial-gradient(
+      hsl(var(--border)) 1px,
+      transparent 1px
+    );
+    background-size: 22px 22px;
   }
 }
