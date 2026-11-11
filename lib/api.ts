@@ -2,10 +2,8 @@
 
 import type { DrawElement } from "@/lib/drawing";
 
-export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080").replace(
-  /\/$/,
-  ""
-);
+// Same-origin by default: next.config.mjs proxies /api/* to the backend.
+export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
 
 export type ApiUser = {
   id: string;

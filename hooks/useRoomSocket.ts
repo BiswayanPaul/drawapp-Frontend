@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ClientMessage, RoomUser, ServerMessage } from "@/lib/drawing";
-import { API_URL } from "@/lib/api";
-
+// Vercel can't proxy WebSockets, so sockets go straight to the backend. They
+// authenticate with a signed room token, not the cookie.
 export const WS_URL =
-  process.env.NEXT_PUBLIC_WS_URL ?? API_URL.replace(/^http/, "ws");
+  process.env.NEXT_PUBLIC_WS_URL ??
+  (process.env.NODE_ENV === "production"
+    ? "wss://drawapp-backend-gzkk.onrender.com"
+    : "ws://localhost:8080");
 
 export type SocketStatus = "connecting" | "open" | "reconnecting" | "denied";
 
