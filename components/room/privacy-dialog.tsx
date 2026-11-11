@@ -1,13 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Globe, Loader2, Lock, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormError } from "@/components/auth/form-error";
-import { updateRoomPassword } from "@/app/actions/roomactions";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
 
 export function PrivacyButton({
   roomId,
@@ -61,7 +60,6 @@ function PrivacyDialog({
   isPrivate: boolean;
   onClose: () => void;
 }) {
-  const router = useRouter();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState<"save" | "public" | null>(null);
@@ -75,14 +73,15 @@ function PrivacyDialog({
   const run = async (action: "save" | "public") => {
     setPending(action);
     setError(undefined);
-    const result = await updateRoomPassword(roomId, action === "public" ? null : password);
-    setPending(null);
-    if (result.error) {
-      setError(result.error);
-      return;
+    try {
+      await api.updateRoomPrivacy(roomId, action === "public" ? null : password);
+      onClose();
+      // The API mints a fresh room token after an access-version change.
+      window.location.reload();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Couldn't update room privacy.");
+      setPending(null);
     }
-    onClose();
-    router.refresh();
   };
 
   return (

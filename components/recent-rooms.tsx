@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { Clock, Lock } from "lucide-react";
+import { elementsToSvg, type DrawElement } from "@/lib/drawing";
 
 type RecentRoom = {
   id: string;
-  visitedAt: Date;
+  visitedAt: string;
   isPrivate: boolean;
-  thumbnail: string;
+  elements: DrawElement[];
 };
 
 const relative = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
@@ -40,7 +41,7 @@ export default function RecentRooms({ rooms }: { rooms: RecentRoom[] }) {
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={room.thumbnail}
+                src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(elementsToSvg(room.elements))}`}
                 alt={`Drawing in room ${room.id}`}
                 className="aspect-[16/10] w-full border-b bg-white object-cover"
               />
@@ -53,7 +54,7 @@ export default function RecentRooms({ rooms }: { rooms: RecentRoom[] }) {
                 </p>
                 <p className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock className="size-3" />
-                  {timeAgo(room.visitedAt)}
+                  {timeAgo(new Date(room.visitedAt))}
                 </p>
               </div>
             </Link>

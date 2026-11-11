@@ -7,7 +7,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import z from "zod";
 import { Loader2 } from "lucide-react";
 import { RegisterSchema } from "@/utils/schema";
-import { Register } from "@/app/actions/authactions";
+import { api } from "@/lib/api";
+import { useAuth } from "@/components/auth/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,6 +23,7 @@ import { GoogleButton, OrDivider } from "./google-button";
 import { FormError } from "./form-error";
 
 export function RegisterForm() {
+  const { refreshSession } = useAuth();
   const [authError, setAuthError] = useState<string>();
   const form = useForm<z.infer<typeof RegisterSchema>>({
     resolver: zodResolver(RegisterSchema),
@@ -30,12 +32,13 @@ export function RegisterForm() {
 
   async function onSubmit(values: z.infer<typeof RegisterSchema>) {
     setAuthError(undefined);
-    const response = await Register(values);
-    if (response.error) {
-      setAuthError(response.error);
-      return;
+    try {
+      await api.register(values);
+      await refreshSession();
+      window.location.assign("/");
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Couldn't create your account.");
     }
-    window.location.assign("/");
   }
 
   const pending = form.formState.isSubmitting;

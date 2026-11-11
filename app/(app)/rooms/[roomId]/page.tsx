@@ -1,46 +1,57 @@
-import { notFound, redirect } from "next/navigation";
-import { auth } from "@/auth";
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import RoomCanvas from "@/components/room/room-canvas";
 import RoomLock from "@/components/room/room-lock";
 import { RoomIdSchema } from "@/utils/schema";
 import { normalizeRoomId } from "@/lib/room";
-import { createRoomToken } from "@/lib/room-token";
-import { getRoomAccess, recordVisit } from "@/utils/rooms";
+import { api, type RoomAccess } from "@/lib/api";
+import { useAuth } from "@/components/auth/auth-provider";
 
-export default async function RoomPage({ params }: { params: { roomId: string } }) {
+export default function RoomPage({ params }: { params: { roomId: string } }) {
+  const router = useRouter();
+  const { user } = useAuth();
   const parsed = RoomIdSchema.safeParse(decodeURIComponent(params.roomId));
-  if (!parsed.success) notFound();
+  const roomId = parsed.success ? normalizeRoomId(parsed.data) : null;
+  const [access, setAccess] = useState<RoomAccess | null>(null);
+  const [error, setError] = useState<string>();
 
-  const roomId = normalizeRoomId(parsed.data);
-  if (roomId !== params.roomId) redirect(`/rooms/${roomId}`);
+  const loadAccess = useCallback(async () => {
+    if (!roomId) return;
+    setError(undefined);
+    try {
+      setAccess(await api.roomAccess(roomId));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Couldn't open this room.");
+    }
+  }, [roomId]);
 
-  const session = await auth();
-  if (!session?.user?.id) redirect("/signin");
-  const user = {
-    id: session.user.id,
-    name: session.user.name ?? session.user.email ?? "Guest",
-    image: session.user.image ?? null,
-  };
+  useEffect(() => {
+    if (!parsed.success) {
+      router.replace("/");
+      return;
+    }
+    if (roomId !== params.roomId) {
+      router.replace(`/rooms/${roomId}`);
+      return;
+    }
+    if (user) void loadAccess();
+  }, [loadAccess, params.roomId, parsed.success, roomId, router, user]);
 
-  const access = await getRoomAccess(roomId, user.id);
-  if (!access.hasAccess) return <RoomLock roomId={roomId} />;
-
-  await recordVisit(user.id, roomId);
-  const token = createRoomToken({
-    roomId,
-    userId: user.id,
-    name: user.name,
-    image: user.image,
-    accessVersion: access.accessVersion,
-  });
+  if (!roomId || roomId !== params.roomId || !user || !access) {
+    return error ? <p className="p-6 text-sm text-red-600">{error}</p> : null;
+  }
+  if (!access.hasAccess) return <RoomLock roomId={roomId} onUnlocked={() => void loadAccess()} />;
 
   return (
     <RoomCanvas
       roomId={roomId}
-      user={user}
-      token={token}
+      user={{ id: user.id, name: user.name ?? user.email, image: user.image }}
+      token={access.token}
       isOwner={access.isOwner}
       isPrivate={access.isPrivate}
+      onAccessLost={() => void loadAccess()}
     />
   );
 }

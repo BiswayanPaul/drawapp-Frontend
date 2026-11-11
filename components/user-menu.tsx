@@ -1,6 +1,6 @@
 "use client";
 
-import type { User } from "next-auth";
+import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import {
   DropdownMenu,
@@ -10,10 +10,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SignOut } from "@/app/actions/authactions";
 import { Avatar } from "@/components/avatar";
+import { api, type ApiUser } from "@/lib/api";
+import { useAuth } from "@/components/auth/auth-provider";
 
-export default function UserMenu({ user }: { user: User }) {
+export default function UserMenu({ user }: { user: ApiUser }) {
+  const router = useRouter();
+  const { refreshSession } = useAuth();
+
+  const signOut = async () => {
+    try {
+      await api.signOut();
+    } finally {
+      await refreshSession();
+      router.replace("/signin");
+    }
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="flex items-center gap-2 rounded-full p-1 pr-3 outline-none transition hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring">
@@ -29,7 +42,7 @@ export default function UserMenu({ user }: { user: User }) {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onSelect={() => SignOut()}
+          onSelect={() => void signOut()}
           className="cursor-pointer text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"
         >
           <LogOut className="mr-2 size-4" />

@@ -7,7 +7,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import z from "zod";
 import { Loader2 } from "lucide-react";
 import { CredentialSchema } from "@/utils/schema";
-import { SignInWithCredentials } from "@/app/actions/authactions";
+import { api } from "@/lib/api";
+import { useAuth } from "@/components/auth/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,6 +23,7 @@ import { GoogleButton, OrDivider } from "./google-button";
 import { FormError } from "./form-error";
 
 export function SignInForm({ initialError }: { initialError?: string }) {
+  const { refreshSession } = useAuth();
   const [authError, setAuthError] = useState(initialError);
   const form = useForm<z.infer<typeof CredentialSchema>>({
     resolver: zodResolver(CredentialSchema),
@@ -30,13 +32,13 @@ export function SignInForm({ initialError }: { initialError?: string }) {
 
   async function onSubmit(values: z.infer<typeof CredentialSchema>) {
     setAuthError(undefined);
-    const response = await SignInWithCredentials(values);
-    if (response.error) {
-      setAuthError(response.error);
-      return;
+    try {
+      await api.signIn(values);
+      await refreshSession();
+      window.location.assign("/");
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Couldn't sign you in.");
     }
-    // Full navigation so the server layout picks up the fresh session cookie.
-    window.location.assign("/");
   }
 
   const pending = form.formState.isSubmitting;

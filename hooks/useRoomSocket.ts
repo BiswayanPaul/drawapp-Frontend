@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ClientMessage, RoomUser, ServerMessage } from "@/lib/drawing";
+import { API_URL } from "@/lib/api";
 
 export const WS_URL =
-  process.env.NEXT_PUBLIC_WS_URL ?? "wss://drawapp-backend-gzkk.onrender.com";
+  process.env.NEXT_PUBLIC_WS_URL ?? API_URL.replace(/^http/, "ws");
 
 export type SocketStatus = "connecting" | "open" | "reconnecting" | "denied";
 
@@ -33,6 +34,16 @@ export function useRoomSocket(
     let retryTimer: ReturnType<typeof setTimeout>;
     let disposed = false;
 
+    // Retrying with the same token won't help; the page fetches a new one.
+    const deny = () => {
+      if (disposed) return;
+      disposed = true;
+      clearTimeout(retryTimer);
+      wsRef.current?.close();
+      setStatus("denied");
+      onDeniedRef.current();
+    };
+
     const connect = () => {
       const params = new URLSearchParams({ roomId });
       if (token) params.set("token", token);
@@ -46,7 +57,9 @@ export function useRoomSocket(
       };
       ws.onmessage = (event) => {
         try {
-          onMessageRef.current(JSON.parse(event.data));
+          const message: ServerMessage = JSON.parse(event.data);
+          if (message.type === "denied") deny();
+          else onMessageRef.current(message);
         } catch (error) {
           console.error("Bad message from server", error);
         }
@@ -54,9 +67,7 @@ export function useRoomSocket(
       ws.onclose = (event) => {
         if (disposed) return;
         if (event.code === ACCESS_REVOKED) {
-          // Retrying with the same token won't help; the page fetches a new one.
-          setStatus("denied");
-          onDeniedRef.current();
+          deny();
           return;
         }
         setStatus("reconnecting");

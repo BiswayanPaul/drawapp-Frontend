@@ -58,12 +58,14 @@ export default function RoomCanvas({
   token,
   isOwner,
   isPrivate,
+  onAccessLost,
 }: {
   roomId: string;
   user: RoomUser;
   token: string | null;
   isOwner: boolean;
   isPrivate: boolean;
+  onAccessLost: () => void;
 }) {
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -171,10 +173,8 @@ export default function RoomCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Access changed (password set or changed): reload so the server decides what we see.
-  const { status, send } = useRoomSocket(roomId, token, user, handleMessage, () =>
-    router.refresh()
-  );
+  // Access changed (password set or changed): ask the API again for what we may see.
+  const { status, send } = useRoomSocket(roomId, token, user, handleMessage, onAccessLost);
 
   function emit(message: ClientMessage) {
     if (send(message)) return;

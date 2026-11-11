@@ -1,35 +1,20 @@
 "use client";
 
-import { useFormStatus } from "react-dom";
 import { FcGoogle } from "react-icons/fc";
-import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SignInWithGoogle } from "@/app/actions/authactions";
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button
-      type="submit"
-      variant="outline"
-      disabled={pending}
-      className="h-11 w-full gap-2 bg-card"
-    >
-      {pending ? (
-        <Loader2 className="size-4 animate-spin" />
-      ) : (
-        <FcGoogle className="size-5" />
-      )}
-      Continue with Google
-    </Button>
-  );
-}
+import { googleSignInUrl } from "@/lib/api";
 
 export function GoogleButton() {
   return (
-    <form action={SignInWithGoogle}>
-      <SubmitButton />
-    </form>
+    <Button
+      type="button"
+      variant="outline"
+      onClick={() => window.location.assign(googleSignInUrl())}
+      className="h-11 w-full gap-2 bg-card"
+    >
+      <FcGoogle className="size-5" />
+      Continue with Google
+    </Button>
   );
 }
 

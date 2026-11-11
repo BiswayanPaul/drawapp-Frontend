@@ -1,16 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ArrowLeft, Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormError } from "@/components/auth/form-error";
-import { unlockRoom } from "@/app/actions/roomactions";
+import { api } from "@/lib/api";
 
-export default function RoomLock({ roomId }: { roomId: string }) {
-  const router = useRouter();
+export default function RoomLock({ roomId, onUnlocked }: { roomId: string; onUnlocked: () => void }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState(false);
@@ -19,13 +17,13 @@ export default function RoomLock({ roomId }: { roomId: string }) {
     e.preventDefault();
     setPending(true);
     setError(undefined);
-    const result = await unlockRoom(roomId, password);
-    if (result.error) {
-      setError(result.error);
+    try {
+      await api.unlockRoom(roomId, password);
+      onUnlocked();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Couldn't unlock this room.");
       setPending(false);
-      return;
     }
-    router.refresh();
   };
 
   return (

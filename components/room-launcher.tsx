@@ -8,8 +8,8 @@ import { Input } from "@/components/ui/input";
 import { RoomIdSchema } from "@/utils/schema";
 import { normalizeRoomId } from "@/lib/room";
 import { WS_URL } from "@/hooks/useRoomSocket";
-import { createRoom } from "@/app/actions/roomactions";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
 
 export default function RoomLauncher() {
   const router = useRouter();
@@ -31,13 +31,13 @@ export default function RoomLauncher() {
     e.preventDefault();
     setCreating(true);
     setCreateError(undefined);
-    const result = await createRoom(isPrivate ? password : undefined);
-    if (result.error || !result.roomId) {
-      setCreateError(result.error);
+    try {
+      const result = await api.createRoom(isPrivate ? password : undefined);
+      router.push(`/rooms/${result.roomId}`);
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : "Couldn't create the room.");
       setCreating(false);
-      return;
     }
-    router.push(`/rooms/${result.roomId}`);
   };
 
   const handleJoinRoom = (e: React.FormEvent) => {

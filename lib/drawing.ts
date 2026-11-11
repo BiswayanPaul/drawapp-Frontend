@@ -49,7 +49,8 @@ export type ServerMessage =
   | { type: "remove"; id: string }
   | { type: "clear" }
   | { type: "presence"; count: number; users?: Member[] }
-  | { type: "cursor"; connectionId: string; x: number; y: number };
+  | { type: "cursor"; connectionId: string; x: number; y: number }
+  | { type: "denied" };
 
 export type ClientMessage =
   | { type: "join"; user: RoomUser }

@@ -13,14 +13,8 @@ export function FormError({ message }: { message?: string }) {
   );
 }
 
-// Error codes next-auth appends to the sign-in page URL (pages.error).
 const OAUTH_ERRORS: Record<string, string> = {
-  AccessDenied: "Google sign-in was cancelled or couldn't be completed.",
-  Configuration:
-    "Sign-in is misconfigured on the server. Please try again later.",
-  OAuthAccountNotLinked:
-    "This email is already registered with a password. Sign in with your password instead.",
-  CredentialsSignin: "Invalid email or password",
+  oauth: "Google sign-in was cancelled or couldn't be completed.",
 };
 
 export function oauthErrorMessage(code?: string | string[]) {

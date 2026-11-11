@@ -1,8 +1,11 @@
-import { auth } from "@/auth";
+"use client";
+
+import { useEffect, useState } from "react";
 import RoomLauncher from "@/components/room-launcher";
 import RecentRooms from "@/components/recent-rooms";
-import { getRecentRooms } from "@/utils/rooms";
 import { Palette, Share2, Zap } from "lucide-react";
+import { api, type RecentRoom } from "@/lib/api";
+import { useAuth } from "@/components/auth/auth-provider";
 
 const features = [
   {
@@ -22,10 +25,17 @@ const features = [
   },
 ];
 
-export default async function Home() {
-  const session = await auth();
-  const firstName = session?.user?.name?.split(" ")[0];
-  const recentRooms = session?.user?.id ? await getRecentRooms(session.user.id) : [];
+export default function Home() {
+  const { user } = useAuth();
+  const [recentRooms, setRecentRooms] = useState<RecentRoom[]>([]);
+  const firstName = user?.name?.split(" ")[0];
+
+  useEffect(() => {
+    api
+      .recentRooms()
+      .then(({ rooms }) => setRecentRooms(rooms))
+      .catch(() => setRecentRooms([]));
+  }, []);
 
   return (
     <div className="bg-dots flex flex-1 flex-col justify-center">

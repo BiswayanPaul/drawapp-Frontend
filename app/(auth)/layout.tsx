@@ -1,18 +1,15 @@
 import Image from "next/image";
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
 import paintBrush from "@/app/fonts/paintbrush.png";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { GuestOnly } from "@/components/app-shell";
 
-export default async function AuthLayout({
+export default function AuthLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await auth();
-  if (session?.user) redirect("/");
-
   return (
+    <GuestOnly>
     <div className="grid min-h-dvh lg:grid-cols-2">
       <aside className="relative hidden overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-500 p-12 text-white lg:flex lg:flex-col lg:justify-between">
         <div className="flex items-center gap-3 text-lg font-semibold">
@@ -56,5 +53,6 @@ export default async function AuthLayout({
         </div>
       </section>
     </div>
+    </GuestOnly>
   );
 }
