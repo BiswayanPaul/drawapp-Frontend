@@ -1,7 +1,10 @@
 // Elements live in an unbounded "world" coordinate space shared by every client.
 // Each client looks at it through its own camera (View), so the board is infinite
 // and the visible area simply matches the screen.
+import { canvasFont, textFont, type TextFont } from "@/lib/fonts";
+
 export const CANVAS_BACKGROUND = "#ffffff";
+export type { TextFont };
 
 export type Point = { x: number; y: number };
 export type Box = { x: number; y: number; width: number; height: number };
@@ -53,7 +56,7 @@ export type ShapeElement = Base & {
   from: Point;
   to: Point;
 };
-export type TextElement = Base & { kind: "text"; at: Point; text: string };
+export type TextElement = Base & { kind: "text"; at: Point; text: string; font?: TextFont };
 export type FillElement = Base & { kind: "fill"; at: Point };
 export type DrawElement = StrokeElement | ShapeElement | TextElement | FillElement;
 
@@ -87,7 +90,6 @@ export type ClientMessage =
   | { type: "cursor-leave" };
 
 export const textFontSize = (size: number) => 16 + size * 2;
-const FONT_FAMILY = "ui-sans-serif, system-ui, -apple-system, sans-serif";
 
 export function newId() {
   return crypto.randomUUID().replace(/-/g, "").slice(0, 16);
@@ -109,7 +111,7 @@ function textWidth(el: TextElement) {
     measureCtx = document.createElement("canvas").getContext("2d");
   }
   if (!measureCtx) return el.text.length * textFontSize(el.size) * 0.6;
-  measureCtx.font = `600 ${textFontSize(el.size)}px ${FONT_FAMILY}`;
+  measureCtx.font = canvasFont(el.font, textFontSize(el.size));
   return measureCtx.measureText(el.text).width;
 }
 
@@ -246,7 +248,7 @@ export function drawElement(ctx: CanvasRenderingContext2D, el: DrawElement) {
       break;
     }
     case "text": {
-      ctx.font = `600 ${textFontSize(el.size)}px ${FONT_FAMILY}`;
+      ctx.font = canvasFont(el.font, textFontSize(el.size));
       ctx.textBaseline = "top";
       ctx.fillText(el.text, el.at.x, el.at.y);
       break;
@@ -333,6 +335,11 @@ const RASTER_PADDING = 8;
 const RASTER_MAX_PIXELS = 4_000_000;
 let rasterCache: Raster | null = null;
 
+// Called when web fonts finish loading so text inside the raster is redrawn.
+export function invalidateRaster() {
+  rasterCache = null;
+}
+
 function rasterKey(list: DrawElement[], lastFill: number) {
   let points = 0;
   for (let i = 0; i <= lastFill; i++) {
@@ -388,13 +395,68 @@ export function fillWouldApply(elements: Iterable<DrawElement>, fill: FillElemen
   return buildRaster(list, list.length - 1)?.applied.has(fill.id) ?? false;
 }
 
+export type GridMode = "lines" | "dots" | "off";
+const GRID_BASE = 20;
+
+// Graph-paper grid in screen space. Spacing steps by 5x as you zoom so lines stay
+// 14–70px apart, with every 5th line stronger. It's drawn over the drawing, very
+// faintly: eraser strokes and fills paint the background colour, which would
+// otherwise blot out a grid underneath them.
+function drawGrid(ctx: CanvasRenderingContext2D, view: View, ratio: number, mode: GridMode) {
+  let step = GRID_BASE;
+  while (step * view.zoom < 14) step *= 5;
+  while (step * view.zoom > 70) step /= 5;
+  const width = ctx.canvas.width / ratio;
+  const height = ctx.canvas.height / ratio;
+  const firstX = Math.floor(view.x / step);
+  const firstY = Math.floor(view.y / step);
+  const lastX = Math.ceil((view.x + width / view.zoom) / step);
+  const lastY = Math.ceil((view.y + height / view.zoom) / step);
+  const px = (world: number, origin: number) =>
+    Math.round((world - origin) * view.zoom * ratio) + 0.5;
+
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (mode === "lines") {
+    for (const major of [false, true]) {
+      ctx.beginPath();
+      for (let i = firstX; i <= lastX; i++) {
+        if ((i % 5 === 0) !== major) continue;
+        const x = px(i * step, view.x);
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, ctx.canvas.height);
+      }
+      for (let j = firstY; j <= lastY; j++) {
+        if ((j % 5 === 0) !== major) continue;
+        const y = px(j * step, view.y);
+        ctx.moveTo(0, y);
+        ctx.lineTo(ctx.canvas.width, y);
+      }
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = major ? "rgba(100, 116, 139, 0.2)" : "rgba(100, 116, 139, 0.09)";
+      ctx.stroke();
+    }
+  } else {
+    for (let i = firstX; i <= lastX; i++) {
+      for (let j = firstY; j <= lastY; j++) {
+        const major = i % 5 === 0 && j % 5 === 0;
+        const r = (major ? 1.6 : 1) * ratio;
+        ctx.fillStyle = major ? "rgba(100, 116, 139, 0.45)" : "rgba(100, 116, 139, 0.28)";
+        ctx.fillRect(px(i * step, view.x) - r, px(j * step, view.y) - r, r * 2, r * 2);
+      }
+    }
+  }
+  ctx.restore();
+}
+
 // Renders the scene through `view`. `pixelRatio` maps CSS pixels to canvas pixels.
 export function renderScene(
   ctx: CanvasRenderingContext2D,
   elements: Iterable<DrawElement>,
   preview: DrawElement | null,
   view: View,
-  pixelRatio: number
+  pixelRatio: number,
+  grid: GridMode = "off"
 ) {
   const list = Array.from(elements);
   let lastFill = -1;
@@ -419,6 +481,7 @@ export function renderScene(
   }
   for (let i = start; i < list.length; i++) drawElement(ctx, list[i]);
   if (preview) drawElement(ctx, preview);
+  if (grid !== "off") drawGrid(ctx, view, pixelRatio, grid);
 }
 
 // Renders everything to a standalone canvas cropped to the drawing, for downloads.
@@ -480,7 +543,7 @@ export function elementsToSvg(elements: DrawElement[]) {
         case "ellipse":
           return `<ellipse cx="${(el.from.x + el.to.x) / 2}" cy="${(el.from.y + el.to.y) / 2}" rx="${Math.abs(el.to.x - el.from.x) / 2}" ry="${Math.abs(el.to.y - el.from.y) / 2}" ${common}/>`;
         case "text":
-          return `<text x="${el.at.x}" y="${el.at.y}" dominant-baseline="hanging" font-family="${FONT_FAMILY}" font-weight="600" font-size="${textFontSize(el.size)}" fill="${escapeXml(el.color)}">${escapeXml(el.text)}</text>`;
+          return `<text x="${el.at.x}" y="${el.at.y}" dominant-baseline="hanging" font-family="${escapeXml(textFont(el.font).family)}" font-weight="${textFont(el.font).weight}" font-size="${textFontSize(el.size)}" fill="${escapeXml(el.color)}">${escapeXml(el.text)}</text>`;
         case "fill":
           // Flood fills depend on rendered pixels; thumbnails skip them.
           return "";

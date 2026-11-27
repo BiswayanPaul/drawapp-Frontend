@@ -12,17 +12,20 @@ import {
   ClientMessage,
   DrawElement,
   FillElement,
+  GridMode,
   Member,
   Point,
   RoomUser,
   ServerMessage,
   ShapeElement,
   StrokeElement,
+  TextFont,
   Tool,
   View,
   clampZoom,
   exportCanvas,
   fillWouldApply,
+  invalidateRaster,
   newId,
   renderScene,
   sceneBounds,
@@ -32,6 +35,7 @@ import {
   zoomAt,
 } from "@/lib/drawing";
 import { api } from "@/lib/api";
+import { loadTextFonts, textFont } from "@/lib/fonts";
 import { useRoomSocket } from "@/hooks/useRoomSocket";
 import { useAuth } from "@/components/auth/auth-provider";
 import { LoginPrompt } from "@/components/auth/login-prompt";
@@ -40,7 +44,7 @@ import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { RoomsDialog } from "./rooms-dialog";
 import UserMenu from "@/components/user-menu";
 import { PeopleMenu, StatusBadge } from "./people-menu";
-import { COLORS, PANEL, SIZES, StyleBar, TOOLS, ToolRail, ZoomControls } from "./toolbar";
+import { COLORS, GRID_NEXT, PANEL, SIZES, StyleBar, TOOLS, ToolRail, ZoomControls } from "./toolbar";
 import { RemoteCursor, RemoteCursors } from "./remote-cursors";
 import { PrivacyButton } from "./privacy-dialog";
 
@@ -52,6 +56,8 @@ const DEFAULT_VIEW: View = { x: 0, y: 0, zoom: 1 };
 const LOCAL_KEY = "drawapp:board";
 // A solo drawing handed to a freshly created room, read once on its first load.
 const SEED_PREFIX = "drawapp:seed:";
+// Grid style is a per-viewer preference, shared by the solo board and rooms.
+const GRID_KEY = "drawapp:grid";
 
 export type RoomConfig = {
   roomId: string;
@@ -149,6 +155,9 @@ export default function Whiteboard({
   const [tool, setTool] = useState<Tool>("pen");
   const [color, setColor] = useState(COLORS[0]);
   const [size, setSize] = useState(SIZES[0]);
+  const [font, setFont] = useState<TextFont>("sans");
+  const [grid, setGridState] = useState<GridMode>("lines");
+  const gridRef = useRef<GridMode>("lines");
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [panning, setPanning] = useState(false);
   const [peers, setPeers] = useState(1);
@@ -174,7 +183,14 @@ export default function Whiteboard({
   const draw = useCallback(() => {
     const ctx = canvasRef.current?.getContext("2d");
     if (ctx) {
-      renderScene(ctx, elements.current.values(), preview.current, viewRef.current, pixelRatio.current);
+      renderScene(
+        ctx,
+        elements.current.values(),
+        preview.current,
+        viewRef.current,
+        pixelRatio.current,
+        gridRef.current
+      );
     }
   }, []);
 
@@ -215,6 +231,39 @@ export default function Whiteboard({
     },
     [persistLocal, render]
   );
+
+  const setGrid = (mode: GridMode) => {
+    gridRef.current = mode;
+    setGridState(mode);
+    render();
+    try {
+      localStorage.setItem(GRID_KEY, mode);
+    } catch {
+      // Not remembered; harmless.
+    }
+  };
+
+  // Restore the grid preference, and redraw once the text fonts have downloaded.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(GRID_KEY);
+      if (saved === "lines" || saved === "dots" || saved === "off") {
+        gridRef.current = saved;
+        setGridState(saved);
+      }
+    } catch {
+      // Storage blocked: keep the default.
+    }
+    let cancelled = false;
+    void loadTextFonts().then(() => {
+      if (cancelled) return;
+      invalidateRaster();
+      render();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [render]);
 
   const showHint = (message: string) => {
     setHint(message);
@@ -517,6 +566,8 @@ export default function Whiteboard({
       } else if (mod && key === "0") {
         e.preventDefault();
         fitToContent();
+      } else if (!mod && !e.altKey && key === "g") {
+        setGrid(GRID_NEXT[gridRef.current]);
       } else if (!mod && !e.altKey) {
         const match = TOOLS.find((t) => t.key === key);
         if (match) setTool(match.tool);
@@ -726,7 +777,15 @@ export default function Whiteboard({
     const draft = textDraftRef.current;
     setTextDraft(null);
     if (!draft?.value.trim()) return;
-    commit({ id: newId(), kind: "text", at: draft.at, text: draft.value.trim(), color, size });
+    commit({
+      id: newId(),
+      kind: "text",
+      at: draft.at,
+      text: draft.value.trim(),
+      color,
+      size,
+      ...(font !== "sans" ? { font } : {}),
+    });
     render();
   }
 
@@ -853,11 +912,13 @@ export default function Whiteboard({
             onBlur={commitText}
             placeholder="Type…"
             maxLength={500}
-            className="pointer-events-auto absolute min-w-[8ch] rounded border border-dashed border-indigo-400 bg-transparent px-0.5 font-semibold leading-none outline-none placeholder:text-slate-400"
+            className="pointer-events-auto absolute min-w-[8ch] rounded border border-dashed border-indigo-400 bg-transparent px-0.5 leading-none outline-none placeholder:text-slate-400"
             style={{
               left: draftAt.x,
               top: draftAt.y,
               fontSize: textFontSize(size) * view.zoom,
+              fontFamily: textFont(font).family,
+              fontWeight: textFont(font).weight,
               color,
               width: `${Math.max(textDraft.value.length + 2, 8)}ch`,
             }}
@@ -958,6 +1019,8 @@ export default function Whiteboard({
           onColorChange={setColor}
           size={size}
           onSizeChange={setSize}
+          font={font}
+          onFontChange={setFont}
           canUndo={history.undo > 0}
           canRedo={history.redo > 0}
           onUndo={undo}
@@ -973,6 +1036,8 @@ export default function Whiteboard({
         onZoomIn={() => zoomBy(1.2)}
         onZoomOut={() => zoomBy(1 / 1.2)}
         onReset={fitToContent}
+        grid={grid}
+        onGridChange={setGrid}
         className="absolute right-3 top-16 lg:bottom-3 lg:left-3 lg:right-auto lg:top-auto"
       />
 

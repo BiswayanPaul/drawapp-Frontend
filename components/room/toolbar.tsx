@@ -16,9 +16,21 @@ import {
   Trash2,
   Type,
   Undo2,
+  Check,
+  ChevronDown,
+  Grid3x3,
+  Grip,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Tool } from "@/lib/drawing";
+import type { GridMode, TextFont, Tool } from "@/lib/drawing";
+import { TEXT_FONTS, textFont } from "@/lib/fonts";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export const COLORS = [
   "#0f172a",
@@ -91,6 +103,8 @@ type StyleBarProps = {
   onColorChange: (color: string) => void;
   size: number;
   onSizeChange: (size: number) => void;
+  font: TextFont;
+  onFontChange: (font: TextFont) => void;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
@@ -108,6 +122,8 @@ export function StyleBar({
   onColorChange,
   size,
   onSizeChange,
+  font,
+  onFontChange,
   canUndo,
   canRedo,
   onUndo,
@@ -162,6 +178,17 @@ export function StyleBar({
 
       <Divider />
 
+      <FontPicker
+        font={font}
+        active={tool === "text"}
+        onChange={(f) => {
+          onFontChange(f);
+          onToolChange("text");
+        }}
+      />
+
+      <Divider />
+
       <div className="flex shrink-0 items-center gap-0.5">
         {SIZES.map((s) => (
           <ToolButton
@@ -198,21 +225,86 @@ export function StyleBar({
   );
 }
 
+// Text style menu; each option is shown in its own font.
+function FontPicker({
+  font,
+  active,
+  onChange,
+}: {
+  font: TextFont;
+  active: boolean;
+  onChange: (font: TextFont) => void;
+}) {
+  const current = textFont(font);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        title={`Text style: ${current.label}`}
+        aria-label={`Text style: ${current.label}`}
+        className={cn(
+          "inline-flex h-9 shrink-0 items-center gap-1 rounded-xl px-2.5 text-muted-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-ring",
+          active ? "bg-accent text-accent-foreground" : "hover:bg-foreground/5 hover:text-foreground"
+        )}
+      >
+        <span className={cn("text-lg leading-none", current.className)}>Aa</span>
+        <ChevronDown className="size-3.5" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="center" sideOffset={10} className="w-56 p-1.5">
+        <DropdownMenuLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Text style
+        </DropdownMenuLabel>
+        {TEXT_FONTS.map((f) => (
+          <DropdownMenuItem
+            key={f.key}
+            onSelect={() => onChange(f.key)}
+            className="cursor-pointer justify-between rounded-lg px-2.5 py-2 focus:bg-foreground/5"
+          >
+            <span className={cn("text-lg leading-tight", f.className)} style={{ fontWeight: f.weight }}>
+              {f.label}
+            </span>
+            {f.key === font && <Check className="size-4 text-primary" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export const GRID_NEXT: Record<GridMode, GridMode> = { lines: "dots", dots: "off", off: "lines" };
+const GRID_LABEL: Record<GridMode, string> = {
+  lines: "Grid: lines",
+  dots: "Grid: dots",
+  off: "Grid: off",
+};
+
 export function ZoomControls({
   zoom,
   onZoomIn,
   onZoomOut,
   onReset,
+  grid,
+  onGridChange,
   className,
 }: {
   zoom: number;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onReset: () => void;
+  grid: GridMode;
+  onGridChange: (grid: GridMode) => void;
   className?: string;
 }) {
+  const GridIcon = grid === "dots" ? Grip : Grid3x3;
   return (
     <div className={cn(PANEL, "flex items-center gap-0.5 p-1", className)}>
+      <ToolButton
+        label={`${GRID_LABEL[grid]} — click to switch (G)`}
+        active={grid !== "off"}
+        onClick={() => onGridChange(GRID_NEXT[grid])}
+      >
+        <GridIcon className={cn("size-4", grid === "off" && "opacity-50")} />
+      </ToolButton>
+      <Divider />
       <ToolButton label="Zoom out (Ctrl -)" onClick={onZoomOut}>
         <Minus className="size-4" />
       </ToolButton>
