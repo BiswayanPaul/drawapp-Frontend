@@ -1066,6 +1066,7 @@ export default function Whiteboard({
               <PrivacyButton roomId={room.roomId} isOwner={room.isOwner} isPrivate={room.isPrivate} />
               <PeopleMenu members={members} fallbackCount={peers} me={room.user} />
               <StatusBadge status={status} />
+              <ThemeToggle className="glass rounded-xl border" />
               <button
                 onClick={() => router.push("/")}
                 className="glass inline-flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50/80 sm:px-3 dark:text-red-400 dark:hover:bg-red-950/40"
