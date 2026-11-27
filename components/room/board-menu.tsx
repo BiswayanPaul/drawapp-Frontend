@@ -3,6 +3,7 @@
 import { useTheme } from "next-themes";
 import {
   Download,
+  Grid3x3,
   Globe,
   Lock,
   LogIn,
@@ -24,6 +25,13 @@ import {
 import { Avatar } from "@/components/avatar";
 import { cn } from "@/lib/utils";
 import type { ApiUser } from "@/lib/api";
+import type { GridMode } from "@/lib/drawing";
+
+const GRID_OPTIONS: { mode: GridMode; label: string }[] = [
+  { mode: "lines", label: "Lines" },
+  { mode: "dots", label: "Dots" },
+  { mode: "off", label: "Off" },
+];
 
 const ITEM = "cursor-pointer gap-2.5 rounded-lg px-2.5 py-2 focus:bg-foreground/5";
 const DANGER =
@@ -40,6 +48,8 @@ export function BoardMenu({
   onSignOut,
   onDownload,
   onClear,
+  grid,
+  onGridChange,
 }: {
   account: ApiUser | null;
   room?: { roomId: string; isOwner: boolean; isPrivate: boolean };
@@ -50,6 +60,8 @@ export function BoardMenu({
   onSignOut: () => void;
   onDownload: () => void;
   onClear: () => void;
+  grid: GridMode;
+  onGridChange: (grid: GridMode) => void;
 }) {
   const { resolvedTheme, setTheme } = useTheme();
   const dark = resolvedTheme === "dark";
@@ -123,6 +135,31 @@ export function BoardMenu({
             )}
           />
         </DropdownMenuItem>
+        {/* Not a menu item: picking a grid style keeps the menu open. */}
+        <div className="flex items-center gap-2.5 px-2.5 py-1.5 text-sm">
+          <Grid3x3 className="size-4" />
+          <span className="flex-1">Grid</span>
+          <div role="radiogroup" aria-label="Grid style" className="flex rounded-lg bg-foreground/5 p-0.5">
+            {GRID_OPTIONS.map(({ mode, label }) => (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={grid === mode}
+                title={`${label} (G cycles)`}
+                onClick={() => onGridChange(mode)}
+                className={cn(
+                  "rounded-md px-2 py-0.5 text-xs transition",
+                  grid === mode
+                    ? "bg-white text-foreground shadow-sm dark:bg-white/15"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
         <DropdownMenuItem className={cn(ITEM, DANGER)} onSelect={onClear}>
           <Trash2 className="size-4" />
           Clear board

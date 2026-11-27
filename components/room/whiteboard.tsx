@@ -186,6 +186,12 @@ export default function Whiteboard({
   const [size, setSize] = useState(DEFAULT_SIZE);
   const [font, setFont] = useState<TextFont>("sans");
   const [toolsCollapsed, setToolsCollapsed] = useState(false);
+  const [autoHide, setAutoHide] = useState(false);
+  // Bars start shown so people notice them, then hide until the cursor comes near.
+  const [reveal, setReveal] = useState({ left: true, bottom: true });
+  const [pinned, setPinned] = useState({ left: false, bottom: false });
+  const railRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const [grid, setGridState] = useState<GridMode>("lines");
   const gridRef = useRef<GridMode>("lines");
   const [spaceHeld, setSpaceHeld] = useState(false);
@@ -544,6 +550,62 @@ export default function Whiteboard({
     const { width, height } = screenSize();
     setView(fitView(elements.current.values(), width, height));
   };
+
+  useEffect(() => {
+    const query = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const update = () => setAutoHide(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (!autoHide) return;
+    const timers: Partial<Record<"left" | "bottom", ReturnType<typeof setTimeout>>> = {};
+    let introOver = false;
+    const set = (side: "left" | "bottom", open: boolean) => {
+      clearTimeout(timers[side]);
+      if (open) {
+        setReveal((r) => (r[side] ? r : { ...r, [side]: true }));
+      } else {
+        // A short delay so brushing past the edge doesn't make them flicker.
+        timers[side] = setTimeout(
+          () => setReveal((r) => (r[side] ? { ...r, [side]: false } : r)),
+          400
+        );
+      }
+    };
+    const update = (x: number, y: number) => {
+      const railWidth = railRef.current?.offsetWidth ?? 0;
+      const bottomHeight = bottomRef.current?.offsetHeight ?? 0;
+      set("left", x < railWidth + 56);
+      set("bottom", y > window.innerHeight - bottomHeight - 48);
+    };
+    const intro = setTimeout(() => {
+      introOver = true;
+      set("left", false);
+      set("bottom", false);
+    }, 2500);
+    const onMove = (e: MouseEvent) => {
+      // While drawing, leave the bars as they are so strokes near an edge don't pop them open.
+      if (!introOver || e.buttons !== 0) return;
+      update(e.clientX, e.clientY);
+    };
+    const onLeave = () => {
+      if (!introOver) return;
+      set("left", false);
+      set("bottom", false);
+    };
+    window.addEventListener("mousemove", onMove);
+    document.documentElement.addEventListener("mouseleave", onLeave);
+    return () => {
+      clearTimeout(intro);
+      clearTimeout(timers.left);
+      clearTimeout(timers.bottom);
+      window.removeEventListener("mousemove", onMove);
+      document.documentElement.removeEventListener("mouseleave", onLeave);
+    };
+  }, [autoHide]);
 
   // Wheel / trackpad: scroll pans, pinch (reported as ctrl+wheel) or ctrl+scroll zooms.
   useEffect(() => {
@@ -996,24 +1058,36 @@ export default function Whiteboard({
     });
   };
 
+  // On mouse devices the tool rail and style bar tuck away and slide back when the
+  // cursor nears their edge. Touch screens can't hover, so they keep them visible.
+  const showLeft = !autoHide || reveal.left || pinned.left;
+  const showBottom = !autoHide || reveal.bottom || pinned.bottom;
+
+  // Tabbing into a bar keeps it open (mouse clicks don't count, or a clicked
+  // button would hold it open until something else took focus).
+  const pinOnKeyboardFocus = (e: React.FocusEvent, side: "left" | "bottom", on: boolean) => {
+    if ((e.target as HTMLElement).matches(":focus-visible")) {
+      setPinned((p) => ({ ...p, [side]: on }));
+    }
+  };
+
   // Room: its code and a copy-invite button. Solo board: the way into a room.
   const shareChip = room ? (
-    <div className={cn(PANEL, "flex h-10 items-center rounded-xl")}>
-      <span
-        className="px-3 font-mono text-sm font-semibold tracking-[0.15em] sm:tracking-[0.2em]"
-        title="Room code"
-      >
-        {room.roomId}
-      </span>
-      <button
-        onClick={handleCopyLink}
-        title="Copy invite link"
-        className="flex h-full items-center gap-1.5 rounded-r-xl border-l px-3 text-sm font-medium text-primary transition hover:bg-primary/10"
-      >
-        {copied ? <Check className="size-4 text-green-600" /> : <Link2 className="size-4" />}
-        <span className="hidden sm:inline">{copied ? "Copied!" : "Copy link"}</span>
-      </button>
-    </div>
+    <button
+      onClick={handleCopyLink}
+      title="Copy invite link"
+      className={cn(
+        PANEL,
+        "flex h-10 items-center gap-2 rounded-full px-3.5 text-sm transition hover:bg-white/90 dark:hover:bg-white/10"
+      )}
+    >
+      {copied ? <Check className="size-4 text-green-600" /> : <Link2 className="size-4 text-primary" />}
+      {copied ? (
+        <span className="font-medium">Link copied!</span>
+      ) : (
+        <span className="font-mono font-semibold tracking-[0.15em]">{room.roomId}</span>
+      )}
+    </button>
   ) : (
     <button
       onClick={() => setDialog({ kind: "rooms" })}
@@ -1099,7 +1173,7 @@ export default function Whiteboard({
         <Link
           href="/"
           title="DrawApp"
-          className={cn(PANEL, "flex h-10 shrink-0 items-center gap-2 rounded-xl px-2.5 transition hover:opacity-90")}
+          className="pointer-events-auto flex h-10 shrink-0 items-center gap-2 px-1 text-slate-800 transition hover:opacity-75"
         >
           <Image src={paintBrush} alt="" width={24} height={24} />
           <span className="hidden font-display text-2xl font-bold leading-none sm:inline">DrawApp</span>
@@ -1121,22 +1195,55 @@ export default function Whiteboard({
             onSignOut={handleSignOut}
             onDownload={handleDownload}
             onClear={handleClear}
+            grid={grid}
+            onGridChange={setGrid}
           />
         )}
       </div>
 
       {/* Tools: left rail on larger screens */}
-      <div className="pointer-events-none absolute left-3 top-1/2 hidden -translate-y-1/2 md:block">
+      <div
+        ref={railRef}
+        onFocusCapture={(e) => pinOnKeyboardFocus(e, "left", true)}
+        onBlurCapture={() => setPinned((p) => ({ ...p, left: false }))}
+        className={cn(
+          "pointer-events-none absolute left-3 top-1/2 hidden -translate-y-1/2 transition-all duration-300 ease-out md:block",
+          !showLeft && "-translate-x-[calc(100%+1.5rem)] opacity-0"
+        )}
+      >
         <ToolRail
           tool={tool}
           onToolChange={setTool}
-          collapsed={toolsCollapsed}
-          onToggleCollapsed={toggleTools}
+          collapsed={!autoHide && toolsCollapsed}
+          onToggleCollapsed={autoHide ? undefined : toggleTools}
         />
       </div>
+      {/* Edge handles hint at the hidden bars */}
+      <span
+        aria-hidden
+        className={cn(
+          "pointer-events-none absolute left-1 top-1/2 hidden h-16 w-1 -translate-y-1/2 rounded-full bg-slate-400/60 transition-opacity duration-300 md:block",
+          showLeft ? "opacity-0" : "opacity-100"
+        )}
+      />
+      <span
+        aria-hidden
+        className={cn(
+          "pointer-events-none absolute bottom-1.5 left-1/2 h-1 w-20 -translate-x-1/2 rounded-full bg-slate-400/60 transition-opacity duration-300",
+          showBottom ? "opacity-0" : "opacity-100"
+        )}
+      />
 
       {/* Bottom bar(s); on phones the tools sit here too */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div
+        ref={bottomRef}
+        onFocusCapture={(e) => pinOnKeyboardFocus(e, "bottom", true)}
+        onBlurCapture={() => setPinned((p) => ({ ...p, bottom: false }))}
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-all duration-300 ease-out",
+          !showBottom && "translate-y-[calc(100%-0.5rem)] opacity-0"
+        )}
+      >
         <StyleBar
           tool={tool}
           onToolChange={setTool}
@@ -1150,12 +1257,13 @@ export default function Whiteboard({
           canRedo={history.redo > 0}
           onUndo={undo}
           onRedo={redo}
+          onMenuOpenChange={(open) => setPinned((p) => ({ ...p, bottom: open }))}
         />
         <ToolRail
           tool={tool}
           onToolChange={setTool}
-          collapsed={toolsCollapsed}
-          onToggleCollapsed={toggleTools}
+          collapsed={!autoHide && toolsCollapsed}
+          onToggleCollapsed={autoHide ? undefined : toggleTools}
           className="md:hidden"
         />
       </div>
@@ -1168,8 +1276,6 @@ export default function Whiteboard({
         onZoomIn={() => zoomBy(1.2)}
         onZoomOut={() => zoomBy(1 / 1.2)}
         onReset={fitToContent}
-        grid={grid}
-        onGridChange={setGrid}
         className="absolute right-3 top-16 lg:bottom-3 lg:left-3 lg:right-auto lg:top-auto"
       />
 

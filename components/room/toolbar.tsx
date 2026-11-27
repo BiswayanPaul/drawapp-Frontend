@@ -18,8 +18,6 @@ import {
   Undo2,
   Check,
   ChevronDown,
-  Grid3x3,
-  Grip,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { GridMode, TextFont, Tool } from "@/lib/drawing";
@@ -75,7 +73,8 @@ export function ToolRail({
   tool: Tool;
   onToolChange: (tool: Tool) => void;
   collapsed: boolean;
-  onToggleCollapsed: () => void;
+  // Omitted where the rail auto-hides instead (mouse devices).
+  onToggleCollapsed?: () => void;
   className?: string;
 }) {
   const visible = collapsed ? TOOLS.filter((t) => t.tool === tool).slice(0, 1) : TOOLS;
@@ -101,13 +100,17 @@ export function ToolRail({
           </ToolButton>
         </span>
       ))}
-      <Divider className="md:mx-0 md:my-0.5 md:h-px md:w-6" />
-      <ToolButton
-        label={collapsed ? "Show all tools" : "Hide tools"}
-        onClick={onToggleCollapsed}
-      >
-        {collapsed ? <ChevronsRight className="size-4" /> : <ChevronsLeft className="size-4" />}
-      </ToolButton>
+      {onToggleCollapsed && (
+        <>
+          <Divider className="md:mx-0 md:my-0.5 md:h-px md:w-6" />
+          <ToolButton
+            label={collapsed ? "Show all tools" : "Hide tools"}
+            onClick={onToggleCollapsed}
+          >
+            {collapsed ? <ChevronsRight className="size-4" /> : <ChevronsLeft className="size-4" />}
+          </ToolButton>
+        </>
+      )}
     </div>
   );
 }
@@ -125,6 +128,8 @@ type StyleBarProps = {
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
+  // Lets an auto-hiding bar stay put while its font menu is open.
+  onMenuOpenChange?: (open: boolean) => void;
   className?: string;
 };
 
@@ -142,6 +147,7 @@ export function StyleBar({
   canRedo,
   onUndo,
   onRedo,
+  onMenuOpenChange,
   className,
 }: StyleBarProps) {
   const pickColor = (c: string) => {
@@ -193,6 +199,7 @@ export function StyleBar({
       <FontPicker
         font={font}
         active={tool === "text"}
+        onOpenChange={onMenuOpenChange}
         onChange={(f) => {
           onFontChange(f);
           onToolChange("text");
@@ -258,14 +265,16 @@ function FontPicker({
   font,
   active,
   onChange,
+  onOpenChange,
 }: {
   font: TextFont;
   active: boolean;
   onChange: (font: TextFont) => void;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const current = textFont(font);
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={onOpenChange}>
       <DropdownMenuTrigger
         title={`Text style: ${current.label}`}
         aria-label={`Text style: ${current.label}`}
@@ -299,54 +308,43 @@ function FontPicker({
 }
 
 export const GRID_NEXT: Record<GridMode, GridMode> = { lines: "dots", dots: "off", off: "lines" };
-const GRID_LABEL: Record<GridMode, string> = {
-  lines: "Grid: lines",
-  dots: "Grid: dots",
-  off: "Grid: off",
-};
 
+// A small zoom pill; − and + slide out on hover (touch devices pinch instead).
 export function ZoomControls({
   zoom,
   onZoomIn,
   onZoomOut,
   onReset,
-  grid,
-  onGridChange,
   className,
 }: {
   zoom: number;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onReset: () => void;
-  grid: GridMode;
-  onGridChange: (grid: GridMode) => void;
   className?: string;
 }) {
-  const GridIcon = grid === "dots" ? Grip : Grid3x3;
+  const extra =
+    "grid w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover:w-9 group-hover:opacity-100 group-focus-within:w-9 group-focus-within:opacity-100";
   return (
-    <div className={cn(PANEL, "flex items-center gap-0.5 p-1", className)}>
-      <ToolButton
-        label={`${GRID_LABEL[grid]} — click to switch (G)`}
-        active={grid !== "off"}
-        onClick={() => onGridChange(GRID_NEXT[grid])}
-      >
-        <GridIcon className={cn("size-4", grid === "off" && "opacity-50")} />
-      </ToolButton>
-      <Divider />
-      <ToolButton label="Zoom out (Ctrl -)" onClick={onZoomOut}>
-        <Minus className="size-4" />
-      </ToolButton>
+    <div className={cn(PANEL, "group flex items-center rounded-full p-0.5", className)}>
+      <span className={extra}>
+        <ToolButton label="Zoom out (Ctrl -)" onClick={onZoomOut}>
+          <Minus className="size-4" />
+        </ToolButton>
+      </span>
       <button
         type="button"
         onClick={onReset}
-        title="Reset view (Ctrl 0)"
-        className="h-9 min-w-[3.5rem] rounded-xl px-1.5 text-xs font-medium tabular-nums text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+        title="Fit drawing to screen (Ctrl 0)"
+        className="h-9 min-w-[3.25rem] rounded-full px-2 text-xs font-medium tabular-nums text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
       >
         {Math.round(zoom * 100)}%
       </button>
-      <ToolButton label="Zoom in (Ctrl +)" onClick={onZoomIn}>
-        <Plus className="size-4" />
-      </ToolButton>
+      <span className={extra}>
+        <ToolButton label="Zoom in (Ctrl +)" onClick={onZoomIn}>
+          <Plus className="size-4" />
+        </ToolButton>
+      </span>
     </div>
   );
 }
