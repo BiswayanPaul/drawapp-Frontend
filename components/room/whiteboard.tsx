@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, Link2, Loader2, LogOut, Users } from "lucide-react";
+import { Check, Link2, LogOut, Users } from "lucide-react";
 import paintBrush from "@/app/fonts/paintbrush.png";
 import { cn } from "@/lib/utils";
 import {
@@ -35,6 +35,9 @@ import { api } from "@/lib/api";
 import { useRoomSocket } from "@/hooks/useRoomSocket";
 import { useAuth } from "@/components/auth/auth-provider";
 import { LoginPrompt } from "@/components/auth/login-prompt";
+import { AuthDialog, type AuthMode } from "@/components/auth/auth-dialog";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { RoomsDialog } from "./rooms-dialog";
 import UserMenu from "@/components/user-menu";
 import { PeopleMenu, StatusBadge } from "./people-menu";
 import { COLORS, PANEL, SIZES, StyleBar, TOOLS, ToolRail, ZoomControls } from "./toolbar";
@@ -107,7 +110,22 @@ function fitView(elements: Iterable<DrawElement>, width: number, height: number)
   };
 }
 
-export default function Whiteboard({ room }: { room?: RoomConfig }) {
+// The one popup that can be open over the board at a time.
+type Dialog =
+  | { kind: "rooms" }
+  | { kind: "login"; title: string; message: string; next: string }
+  | { kind: "auth"; mode: AuthMode; next: string; error?: string };
+
+export type InitialAuth = { mode: AuthMode; next?: string; error?: string };
+
+export default function Whiteboard({
+  room,
+  initialAuth,
+}: {
+  room?: RoomConfig;
+  // Opens the sign-in / register popup on load (the /signin and /register routes).
+  initialAuth?: InitialAuth;
+}) {
   const router = useRouter();
   const { user: account, loading: authLoading } = useAuth();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -147,8 +165,11 @@ export default function Whiteboard({ room }: { room?: RoomConfig }) {
   const [copied, setCopied] = useState(false);
   const [hint, setHint] = useState<string>();
   const hintTimer = useRef<ReturnType<typeof setTimeout>>();
-  const [loginPrompt, setLoginPrompt] = useState(false);
-  const [sharing, setSharing] = useState(false);
+  const [dialog, setDialog] = useState<Dialog | null>(
+    initialAuth
+      ? { kind: "auth", mode: initialAuth.mode, next: initialAuth.next ?? "/", error: initialAuth.error }
+      : null
+  );
 
   const draw = useCallback(() => {
     const ctx = canvasRef.current?.getContext("2d");
@@ -744,30 +765,48 @@ export default function Whiteboard({ room }: { room?: RoomConfig }) {
     }
   };
 
+  const closeDialog = () => {
+    // /signin and /register are just the board with this popup open.
+    if (dialog?.kind === "auth" && window.location.pathname !== "/") {
+      window.history.replaceState(null, "", "/");
+    }
+    setDialog(null);
+  };
+
   // Solo board → live room: needs an account; the drawing comes along.
-  const handleShareLive = async () => {
+  const createLiveRoom = async (password?: string) => {
     if (!account) {
-      setLoginPrompt(true);
+      setDialog({
+        kind: "login",
+        title: "Sign in to draw together",
+        message: "Live rooms need an account. Your board stays saved here, and it comes with you into the new room.",
+        next: "/",
+      });
       return;
     }
-    setSharing(true);
-    try {
-      const { roomId } = await api.createRoom();
-      if (elements.current.size > 0) {
-        try {
-          sessionStorage.setItem(
-            SEED_PREFIX + roomId,
-            JSON.stringify(Array.from(elements.current.values()))
-          );
-        } catch {
-          // Too large to hand over; the room starts empty instead.
-        }
+    const { roomId } = await api.createRoom(password);
+    if (elements.current.size > 0) {
+      try {
+        sessionStorage.setItem(SEED_PREFIX + roomId, JSON.stringify(Array.from(elements.current.values())));
+      } catch {
+        // Too large to hand over; the room starts empty instead.
       }
-      router.push(`/rooms/${roomId}`);
-    } catch (error) {
-      showHint(error instanceof Error ? error.message : "Couldn't create the room.");
-      setSharing(false);
     }
+    router.push(`/rooms/${roomId}`);
+  };
+
+  const joinRoom = (roomId: string) => {
+    const path = `/rooms/${roomId}`;
+    if (!account) {
+      setDialog({
+        kind: "login",
+        title: `Sign in to join ${roomId}`,
+        message: "You'll be taken straight into the room once you're signed in.",
+        next: path,
+      });
+      return;
+    }
+    router.push(path);
   };
 
   const draftAt = textDraft ? toScreen(view, textDraft.at) : null;
@@ -831,7 +870,7 @@ export default function Whiteboard({ room }: { room?: RoomConfig }) {
         <div className={cn(PANEL, "flex min-w-0 items-center rounded-xl")}>
           <Link
             href="/"
-            title="DrawApp home"
+            title="DrawApp"
             className="flex shrink-0 items-center gap-2 px-2.5 py-1.5 font-semibold transition hover:opacity-80"
           >
             <Image src={paintBrush} alt="" width={24} height={24} />
@@ -845,7 +884,7 @@ export default function Whiteboard({ room }: { room?: RoomConfig }) {
               <button
                 onClick={handleCopyLink}
                 title="Copy invite link"
-                className="flex items-center gap-1.5 rounded-r-xl border-l px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                className="flex items-center gap-1.5 rounded-r-xl border-l px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
               >
                 {copied ? <Check className="size-4 text-green-600" /> : <Link2 className="size-4" />}
                 <span className="hidden sm:inline">{copied ? "Copied" : "Invite"}</span>
@@ -869,7 +908,7 @@ export default function Whiteboard({ room }: { room?: RoomConfig }) {
               <StatusBadge status={status} />
               <button
                 onClick={() => router.push("/")}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-200 bg-card px-2.5 text-sm font-medium text-red-600 shadow-sm transition hover:bg-red-50 sm:px-3 dark:border-red-900/60 dark:text-red-400 dark:hover:bg-red-950/40"
+                className="glass inline-flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50/80 sm:px-3 dark:text-red-400 dark:hover:bg-red-950/40"
               >
                 <LogOut className="size-4" />
                 <span className="hidden sm:inline">Leave</span>
@@ -878,26 +917,26 @@ export default function Whiteboard({ room }: { room?: RoomConfig }) {
           ) : (
             <>
               <button
-                onClick={handleShareLive}
-                disabled={sharing}
-                title="Turn this board into a live room others can join"
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:opacity-70"
+                onClick={() => setDialog({ kind: "rooms" })}
+                title="Start or join a live room"
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/25 transition hover:bg-primary/90"
               >
-                {sharing ? <Loader2 className="size-4 animate-spin" /> : <Users className="size-4" />}
+                <Users className="size-4" />
                 <span className="hidden sm:inline">Draw together</span>
               </button>
+              <ThemeToggle className="glass rounded-xl border" />
               {account ? (
-                <div className="rounded-full border bg-card shadow-sm">
+                <div className="glass rounded-full border">
                   <UserMenu user={account} />
                 </div>
               ) : (
                 !authLoading && (
-                <Link
-                  href="/signin?next=/draw"
-                  className="inline-flex h-9 items-center rounded-lg border bg-card px-3 text-sm font-medium shadow-sm transition hover:bg-secondary"
-                >
-                  Sign in
-                </Link>
+                  <button
+                    onClick={() => setDialog({ kind: "auth", mode: "signin", next: "/" })}
+                    className="glass inline-flex h-9 items-center rounded-xl border px-3 text-sm font-medium transition hover:bg-white/80 dark:hover:bg-white/10"
+                  >
+                    Sign in
+                  </button>
                 )
               )}
             </>
@@ -940,18 +979,30 @@ export default function Whiteboard({ room }: { room?: RoomConfig }) {
       {hint && (
         <div
           role="status"
-          className="pointer-events-none absolute left-1/2 top-16 -translate-x-1/2 rounded-full bg-foreground px-3 py-1.5 text-sm text-background shadow-lg"
+          className="glass pointer-events-none absolute left-1/2 top-16 -translate-x-1/2 rounded-full border px-4 py-1.5 text-sm font-medium duration-200 animate-in fade-in-0 slide-in-from-top-2"
         >
           {hint}
         </div>
       )}
 
-      {loginPrompt && (
+      {dialog?.kind === "rooms" && (
+        <RoomsDialog user={account} onCreate={createLiveRoom} onJoin={joinRoom} onClose={closeDialog} />
+      )}
+      {dialog?.kind === "login" && (
         <LoginPrompt
-          title="Sign in to draw together"
-          message="Live rooms need an account. Your board stays saved here, and it comes with you into the new room."
-          next="/draw"
-          onClose={() => setLoginPrompt(false)}
+          title={dialog.title}
+          message={dialog.message}
+          next={dialog.next}
+          onEmail={(mode) => setDialog({ kind: "auth", mode, next: dialog.next })}
+          onClose={closeDialog}
+        />
+      )}
+      {dialog?.kind === "auth" && (
+        <AuthDialog
+          initialMode={dialog.mode}
+          next={dialog.next}
+          initialError={dialog.error}
+          onClose={closeDialog}
         />
       )}
     </div>

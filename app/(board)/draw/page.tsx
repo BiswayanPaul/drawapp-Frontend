@@ -1,11 +1,6 @@
-import type { Metadata } from "next";
-import Whiteboard from "@/components/room/whiteboard";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Blank board — DrawApp",
-};
-
-// Anyone can draw here, signed in or not; the board is kept in this browser.
+// Old link to the solo board, which is now the home page.
 export default function DrawPage() {
-  return <Whiteboard />;
+  redirect("/");
 }

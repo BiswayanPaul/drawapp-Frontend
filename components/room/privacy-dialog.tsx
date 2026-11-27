@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Globe, Loader2, Lock, X } from "lucide-react";
+import { useState } from "react";
+import { Globe, Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { GlassDialog } from "@/components/ui/glass-dialog";
 import { FormError } from "@/components/auth/form-error";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -22,7 +23,7 @@ export function PrivacyButton({
   const label = isPrivate ? "Private" : "Public";
 
   const className =
-    "inline-flex h-9 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-sm text-muted-foreground shadow-sm transition sm:px-3";
+    "glass inline-flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-sm text-muted-foreground transition sm:px-3";
 
   if (!isOwner) {
     // Visitors only see the state; there's nothing for them to change.
@@ -39,7 +40,7 @@ export function PrivacyButton({
       <button
         onClick={() => setOpen(true)}
         title="Room privacy"
-        className={cn(className, "hover:bg-secondary hover:text-foreground")}
+        className={cn(className, "hover:bg-white/80 hover:text-foreground dark:hover:bg-white/10")}
       >
         <Icon className="size-4" />
         <span className="hidden md:inline">{label}</span>
@@ -64,12 +65,6 @@ function PrivacyDialog({
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState<"save" | "public" | null>(null);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const run = async (action: "save" | "public") => {
     setPending(action);
     setError(undefined);
@@ -85,78 +80,59 @@ function PrivacyDialog({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 backdrop-blur-sm sm:items-center"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="privacy-title"
-        className="w-full max-w-sm rounded-2xl border bg-card p-6 shadow-2xl"
+    <GlassDialog onClose={onClose} labelledBy="privacy-title">
+      <h2 id="privacy-title" className="mb-1 pr-6 text-lg font-semibold">
+        {isPrivate ? "Private room" : "Make this room private"}
+      </h2>
+      <p className="mb-5 text-sm text-muted-foreground">
+        {isPrivate
+          ? "People need the password to join. Changing it removes everyone else until they enter the new one."
+          : "Only people who know the password will be able to join. Everyone else in the room right now will need to enter it."}
+      </p>
+
+      <FormError message={error} />
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          run("save");
+        }}
+        className="space-y-3"
       >
-        <div className="mb-1 flex items-start justify-between">
-          <h2 id="privacy-title" className="text-lg font-semibold">
-            {isPrivate ? "Private room" : "Make this room private"}
-          </h2>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="-mr-2 -mt-1 rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
-          >
-            <X className="size-5" />
-          </button>
-        </div>
-        <p className="mb-5 text-sm text-muted-foreground">
-          {isPrivate
-            ? "People need the password to join. Changing it removes everyone else until they enter the new one."
-            : "Only people who know the password will be able to join. Everyone else in the room right now will need to enter it."}
-        </p>
+        <Input
+          type="password"
+          autoFocus
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder={isPrivate ? "New password" : "Room password"}
+          autoComplete="new-password"
+          className="h-11 bg-white/60 dark:bg-white/5"
+        />
+        <Button type="submit" disabled={!!pending || !password} className="h-11 w-full">
+          {pending === "save" ? (
+            <Loader2 className="mr-2 size-4 animate-spin" />
+          ) : (
+            <Lock className="mr-2 size-4" />
+          )}
+          {isPrivate ? "Change password" : "Make private"}
+        </Button>
+      </form>
 
-        <FormError message={error} />
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            run("save");
-          }}
-          className="space-y-3"
+      {isPrivate && (
+        <Button
+          variant="outline"
+          disabled={!!pending}
+          onClick={() => run("public")}
+          className="mt-3 h-11 w-full bg-white/60 dark:bg-white/5"
         >
-          <Input
-            type="password"
-            autoFocus
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder={isPrivate ? "New password" : "Room password"}
-            autoComplete="new-password"
-            className="h-11"
-          />
-          <Button type="submit" disabled={!!pending || !password} className="h-11 w-full">
-            {pending === "save" ? (
-              <Loader2 className="mr-2 size-4 animate-spin" />
-            ) : (
-              <Lock className="mr-2 size-4" />
-            )}
-            {isPrivate ? "Change password" : "Make private"}
-          </Button>
-        </form>
-
-        {isPrivate && (
-          <Button
-            variant="outline"
-            disabled={!!pending}
-            onClick={() => run("public")}
-            className="mt-3 h-11 w-full"
-          >
-            {pending === "public" ? (
-              <Loader2 className="mr-2 size-4 animate-spin" />
-            ) : (
-              <Globe className="mr-2 size-4" />
-            )}
-            Make public
-          </Button>
-        )}
-      </div>
-    </div>
+          {pending === "public" ? (
+            <Loader2 className="mr-2 size-4 animate-spin" />
+          ) : (
+            <Globe className="mr-2 size-4" />
+          )}
+          Make public
+        </Button>
+      )}
+    </GlassDialog>
   );
 }

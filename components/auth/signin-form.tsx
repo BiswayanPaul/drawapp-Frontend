@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -8,7 +7,7 @@ import z from "zod";
 import { Loader2 } from "lucide-react";
 import { CredentialSchema } from "@/utils/schema";
 import { api } from "@/lib/api";
-import { safeNext, withNext } from "@/lib/redirect";
+import { safeNext } from "@/lib/redirect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,7 +21,15 @@ import {
 import { GoogleButton, OrDivider } from "./google-button";
 import { FormError } from "./form-error";
 
-export function SignInForm({ initialError, next }: { initialError?: string; next?: string }) {
+export function SignInForm({
+  initialError,
+  next,
+  onSwitch,
+}: {
+  initialError?: string;
+  next?: string;
+  onSwitch: () => void;
+}) {
   const [authError, setAuthError] = useState(initialError);
   const form = useForm<z.infer<typeof CredentialSchema>>({
     resolver: zodResolver(CredentialSchema),
@@ -43,8 +50,8 @@ export function SignInForm({ initialError, next }: { initialError?: string; next
   const pending = form.formState.isSubmitting;
 
   return (
-    <div className="rounded-2xl border bg-card p-6 shadow-xl shadow-slate-200/60 sm:p-8 dark:shadow-black/30">
-      <h1 className="text-2xl font-bold">Welcome back</h1>
+    <div className="text-left">
+      <h1 id="auth-title" className="pr-6 text-2xl font-bold">Welcome back</h1>
       <p className="mb-6 mt-1 text-sm text-muted-foreground">
         Sign in to create or join a drawing room.
       </p>
@@ -67,7 +74,7 @@ export function SignInForm({ initialError, next }: { initialError?: string; next
                     placeholder="you@example.com"
                     type="email"
                     autoComplete="email"
-                    className="h-11"
+                    className="h-11 bg-white/60 dark:bg-white/5"
                     {...field}
                   />
                 </FormControl>
@@ -86,7 +93,7 @@ export function SignInForm({ initialError, next }: { initialError?: string; next
                     placeholder="••••••••"
                     type="password"
                     autoComplete="current-password"
-                    className="h-11"
+                    className="h-11 bg-white/60 dark:bg-white/5"
                     {...field}
                   />
                 </FormControl>
@@ -103,12 +110,9 @@ export function SignInForm({ initialError, next }: { initialError?: string; next
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         Don&apos;t have an account?{" "}
-        <Link
-          href={withNext("/register", safeNext(next))}
-          className="font-medium text-primary hover:underline"
-        >
+        <button type="button" onClick={onSwitch} className="font-medium text-primary hover:underline">
           Create one
-        </Link>
+        </button>
       </p>
     </div>
   );

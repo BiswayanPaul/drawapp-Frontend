@@ -11,7 +11,7 @@ export function GoogleButton({ next = "/" }: { next?: string }) {
       type="button"
       variant="outline"
       onClick={() => window.location.assign(googleSignInUrl(safeNext(next)))}
-      className="h-11 w-full gap-2 bg-card"
+      className="h-11 w-full gap-2 bg-white/70 dark:bg-white/5"
     >
       <FcGoogle className="size-5" />
       Continue with Google
@@ -21,9 +21,10 @@ export function GoogleButton({ next = "/" }: { next?: string }) {
 
 export function OrDivider() {
   return (
-    <div className="relative my-6 text-center text-xs uppercase tracking-wider text-muted-foreground">
-      <span className="absolute inset-x-0 top-1/2 h-px bg-border" />
-      <span className="relative bg-card px-3">or</span>
+    <div className="my-6 flex items-center gap-3 text-xs uppercase tracking-wider text-muted-foreground">
+      <span className="h-px flex-1 bg-foreground/10" />
+      or
+      <span className="h-px flex-1 bg-foreground/10" />
     </div>
   );
 }

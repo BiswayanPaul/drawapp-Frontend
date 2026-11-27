@@ -46,8 +46,7 @@ export const TOOLS: { tool: Tool; label: string; key: string; icon: typeof Penci
 ];
 
 // Shared look for every floating panel over the board.
-export const PANEL =
-  "pointer-events-auto rounded-2xl border bg-card/95 shadow-xl backdrop-blur dark:shadow-black/40";
+export const PANEL = "glass pointer-events-auto rounded-2xl border";
 
 // Tools: a vertical rail on the left on larger screens, a horizontal strip on phones.
 export function ToolRail({
@@ -139,7 +138,7 @@ export function StyleBar({
             aria-label={`Color ${c}`}
             onClick={() => pickColor(c)}
             className={cn(
-              "size-6 shrink-0 rounded-full shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)] ring-offset-2 ring-offset-card transition hover:scale-110 sm:size-7 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.3)]",
+              "size-6 shrink-0 rounded-full shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)] ring-offset-2 ring-offset-white/70 dark:ring-offset-slate-900 transition hover:scale-110 sm:size-7 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.3)]",
               color === c && showActive && "ring-2 ring-foreground"
             )}
             style={{ backgroundColor: c }}
@@ -147,7 +146,7 @@ export function StyleBar({
         ))}
         <label
           className={cn(
-            "relative size-6 shrink-0 cursor-pointer overflow-hidden rounded-full bg-[conic-gradient(red,yellow,lime,cyan,blue,magenta,red)] ring-offset-2 ring-offset-card transition hover:scale-110 sm:size-7",
+            "relative size-6 shrink-0 cursor-pointer overflow-hidden rounded-full bg-[conic-gradient(red,yellow,lime,cyan,blue,magenta,red)] ring-offset-2 ring-offset-white/70 dark:ring-offset-slate-900 transition hover:scale-110 sm:size-7",
             !COLORS.includes(color) && showActive && "ring-2 ring-foreground"
           )}
           title="Custom color"
@@ -259,7 +258,7 @@ function ToolButton({
         "inline-flex size-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition disabled:pointer-events-none disabled:opacity-35",
         active
           ? "bg-accent text-accent-foreground"
-          : "hover:bg-secondary hover:text-foreground",
+          : "hover:bg-foreground/5 hover:text-foreground",
         danger &&
           "hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
       )}

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Whiteboard from "@/components/room/whiteboard";
 import RoomLock from "@/components/room/room-lock";
 import { LoginRequired } from "@/components/auth/login-prompt";
+import { GlassCard } from "@/components/ui/glass-dialog";
 import { RoomIdSchema } from "@/utils/schema";
 import { normalizeRoomId } from "@/lib/room";
 import { api, type RoomAccess } from "@/lib/api";
@@ -53,7 +54,7 @@ export default function RoomPage({ params }: { params: { roomId: string } }) {
         next={`/rooms/${roomId}`}
       >
         <Link
-          href="/draw"
+          href="/"
           className="mt-3 inline-block text-sm text-muted-foreground hover:text-foreground"
         >
           Or draw on your own without an account →
@@ -64,15 +65,17 @@ export default function RoomPage({ params }: { params: { roomId: string } }) {
 
   if (!access) {
     return error ? (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+      <GlassCard>
         <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-        <button
-          onClick={() => void loadAccess()}
-          className="text-sm font-medium text-primary hover:underline"
-        >
-          Try again
-        </button>
-      </div>
+        <div className="mt-4 flex justify-center gap-4 text-sm font-medium">
+          <button onClick={() => void loadAccess()} className="text-primary hover:underline">
+            Try again
+          </button>
+          <Link href="/" className="text-muted-foreground hover:text-foreground">
+            Back to my board
+          </Link>
+        </div>
+      </GlassCard>
     ) : null;
   }
   if (!access.hasAccess) return <RoomLock roomId={roomId} onUnlocked={() => void loadAccess()} />;

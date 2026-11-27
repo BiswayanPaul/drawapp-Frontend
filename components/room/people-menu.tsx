@@ -37,7 +37,7 @@ export function PeopleMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="inline-flex h-9 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-sm text-muted-foreground shadow-sm outline-none transition hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-secondary sm:px-3">
+      <DropdownMenuTrigger className="glass inline-flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-sm text-muted-foreground outline-none transition hover:bg-white/80 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-white/80 dark:hover:bg-white/10 dark:data-[state=open]:bg-white/10 sm:px-3">
         <Users className="size-4" />
         <span className="font-medium text-foreground">{count}</span>
         <ChevronDown className="size-3.5" />
@@ -90,7 +90,7 @@ export function StatusBadge({ status }: { status: SocketStatus }) {
 
   return (
     <span
-      className="inline-flex h-9 items-center gap-2 rounded-lg border bg-card px-2.5 text-sm text-muted-foreground shadow-sm sm:px-3"
+      className="glass inline-flex h-9 items-center gap-2 rounded-xl border px-2.5 text-sm text-muted-foreground sm:px-3"
       title={
         status === "open"
           ? "Connected to the drawing server"
