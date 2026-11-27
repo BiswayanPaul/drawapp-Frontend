@@ -65,3 +65,66 @@ export function GlassCard({ className, children }: { className?: string; childre
     </div>
   );
 }
+
+// Glass replacement for window.confirm.
+export function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  danger,
+  icon,
+  onConfirm,
+  onClose,
+}: {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  danger?: boolean;
+  icon?: React.ReactNode;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <GlassDialog onClose={onClose} labelledBy="confirm-title" className="text-center">
+      {icon && (
+        <span
+          className={cn(
+            "mb-4 inline-flex size-12 items-center justify-center rounded-2xl",
+            danger ? "bg-red-500/10 text-red-600 dark:text-red-400" : "bg-primary/10 text-primary"
+          )}
+        >
+          {icon}
+        </span>
+      )}
+      <h2 id="confirm-title" className="font-display text-3xl font-bold leading-tight">
+        {title}
+      </h2>
+      <p className="mb-6 mt-1 text-sm text-muted-foreground">{message}</p>
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={onClose}
+          className="h-11 rounded-xl border bg-white/60 text-sm font-medium transition hover:bg-white/90 dark:bg-white/5 dark:hover:bg-white/10"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          autoFocus
+          onClick={() => {
+            onConfirm();
+            onClose();
+          }}
+          className={cn(
+            "h-11 rounded-xl text-sm font-medium text-white shadow-lg transition",
+            danger
+              ? "bg-red-600 shadow-red-600/25 hover:bg-red-600/90"
+              : "bg-primary shadow-primary/25 hover:bg-primary/90"
+          )}
+        >
+          {confirmLabel}
+        </button>
+      </div>
+    </GlassDialog>
+  );
+}

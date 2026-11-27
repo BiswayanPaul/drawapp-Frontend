@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, Link2, LogOut, Users } from "lucide-react";
+import { Check, Link2, LogOut, Trash2, Users } from "lucide-react";
 import paintBrush from "@/app/fonts/paintbrush.png";
 import { cn } from "@/lib/utils";
 import {
@@ -44,6 +44,7 @@ import { LoginPrompt } from "@/components/auth/login-prompt";
 import { AuthDialog, type AuthMode } from "@/components/auth/auth-dialog";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { RoomsDialog } from "./rooms-dialog";
+import { ConfirmDialog } from "@/components/ui/glass-dialog";
 import UserMenu from "@/components/user-menu";
 import { PeopleMenu, StatusBadge } from "./people-menu";
 import { COLORS, GRID_NEXT, PANEL, SIZES, StyleBar, TOOLS, ToolRail, ZoomControls } from "./toolbar";
@@ -133,6 +134,7 @@ function fitView(elements: Iterable<DrawElement>, width: number, height: number)
 // The one popup that can be open over the board at a time.
 type Dialog =
   | { kind: "rooms" }
+  | { kind: "clear" }
   | { kind: "login"; title: string; message: string; next: string }
   | { kind: "auth"; mode: AuthMode; next: string; error?: string };
 
@@ -872,10 +874,14 @@ export default function Whiteboard({
   };
 
   const handleClear = () => {
-    const question = room
-      ? "Clear the board for everyone in this room?"
-      : "Clear your board? This can't be undone.";
-    if (!window.confirm(question)) return;
+    if (elements.current.size === 0) {
+      showHint("The board is already empty");
+      return;
+    }
+    setDialog({ kind: "clear" });
+  };
+
+  const clearBoard = () => {
     apply({ type: "clear" });
     emit({ type: "clear" });
     undoStack.current = [];
@@ -902,7 +908,7 @@ export default function Whiteboard({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      window.prompt("Copy this link:", window.location.href);
+      showHint("Couldn't copy — share the link from the address bar");
     }
   };
 
@@ -1143,6 +1149,21 @@ export default function Whiteboard({
         </div>
       )}
 
+      {dialog?.kind === "clear" && (
+        <ConfirmDialog
+          title={room ? "Clear for everyone?" : "Clear your board?"}
+          message={
+            room
+              ? "This wipes the board for everyone in this room. It can't be undone."
+              : "Everything on your board will be erased. This can't be undone."
+          }
+          confirmLabel="Clear board"
+          danger
+          icon={<Trash2 className="size-6" />}
+          onConfirm={clearBoard}
+          onClose={closeDialog}
+        />
+      )}
       {dialog?.kind === "rooms" && (
         <RoomsDialog user={account} onCreate={createLiveRoom} onJoin={joinRoom} onClose={closeDialog} />
       )}
