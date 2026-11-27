@@ -1,12 +1,36 @@
-// Every client draws in the same logical space, so strokes line up no matter
-// how large the canvas is on screen.
-export const CANVAS_WIDTH = 1600;
-export const CANVAS_HEIGHT = 1000;
+// Elements live in an unbounded "world" coordinate space shared by every client.
+// Each client looks at it through its own camera (View), so the board is infinite
+// and the visible area simply matches the screen.
 export const CANVAS_BACKGROUND = "#ffffff";
 
 export type Point = { x: number; y: number };
+export type Box = { x: number; y: number; width: number; height: number };
+
+// World coordinate shown at the top-left corner of the screen, and the zoom factor.
+export type View = { x: number; y: number; zoom: number };
+export const MIN_ZOOM = 0.1;
+export const MAX_ZOOM = 8;
+export const clampZoom = (zoom: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
+
+export const toWorld = (view: View, screen: Point): Point => ({
+  x: screen.x / view.zoom + view.x,
+  y: screen.y / view.zoom + view.y,
+});
+
+export const toScreen = (view: View, world: Point): Point => ({
+  x: (world.x - view.x) * view.zoom,
+  y: (world.y - view.y) * view.zoom,
+});
+
+// Zoom so the world point under `anchor` (screen coords) stays put.
+export function zoomAt(view: View, anchor: Point, zoom: number): View {
+  const next = clampZoom(zoom);
+  const world = toWorld(view, anchor);
+  return { zoom: next, x: world.x - anchor.x / next, y: world.y - anchor.y / next };
+}
 
 export type Tool =
+  | "hand"
   | "pen"
   | "highlighter"
   | "eraser"
@@ -50,6 +74,7 @@ export type ServerMessage =
   | { type: "clear" }
   | { type: "presence"; count: number; users?: Member[] }
   | { type: "cursor"; connectionId: string; x: number; y: number }
+  | { type: "cursor-leave"; connectionId: string }
   | { type: "denied" };
 
 export type ClientMessage =
@@ -58,7 +83,8 @@ export type ClientMessage =
   | { type: "append"; id: string; points: Point[] }
   | { type: "remove"; id: string }
   | { type: "clear" }
-  | { type: "cursor"; x: number; y: number };
+  | { type: "cursor"; x: number; y: number }
+  | { type: "cursor-leave" };
 
 export const textFontSize = (size: number) => 16 + size * 2;
 const FONT_FAMILY = "ui-sans-serif, system-ui, -apple-system, sans-serif";
@@ -76,6 +102,74 @@ function arrowHead(from: Point, to: Point, size: number) {
   }));
 }
 
+// Measuring text needs a context; one shared offscreen canvas is enough.
+let measureCtx: CanvasRenderingContext2D | null = null;
+function textWidth(el: TextElement) {
+  if (!measureCtx && typeof document !== "undefined") {
+    measureCtx = document.createElement("canvas").getContext("2d");
+  }
+  if (!measureCtx) return el.text.length * textFontSize(el.size) * 0.6;
+  measureCtx.font = `600 ${textFontSize(el.size)}px ${FONT_FAMILY}`;
+  return measureCtx.measureText(el.text).width;
+}
+
+export function elementBounds(el: DrawElement): Box | null {
+  switch (el.kind) {
+    case "stroke": {
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const p of el.points) {
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x);
+        maxY = Math.max(maxY, p.y);
+      }
+      if (!Number.isFinite(minX)) return null;
+      const r = el.size / 2;
+      return { x: minX - r, y: minY - r, width: maxX - minX + el.size, height: maxY - minY + el.size };
+    }
+    case "line":
+    case "arrow":
+    case "rect":
+    case "ellipse": {
+      const r = el.kind === "arrow" ? Math.max(14, el.size * 3.5) : el.size / 2;
+      const x = Math.min(el.from.x, el.to.x) - r;
+      const y = Math.min(el.from.y, el.to.y) - r;
+      return {
+        x,
+        y,
+        width: Math.abs(el.to.x - el.from.x) + r * 2,
+        height: Math.abs(el.to.y - el.from.y) + r * 2,
+      };
+    }
+    case "text":
+      return { x: el.at.x, y: el.at.y, width: textWidth(el), height: textFontSize(el.size) * 1.2 };
+    case "fill":
+      return { x: el.at.x, y: el.at.y, width: 0, height: 0 };
+  }
+}
+
+export function sceneBounds(elements: Iterable<DrawElement>): Box | null {
+  let box: Box | null = null;
+  for (const el of Array.from(elements)) {
+    const b = elementBounds(el);
+    if (!b) continue;
+    if (!box) {
+      box = { ...b };
+      continue;
+    }
+    const right = Math.max(box.x + box.width, b.x + b.width);
+    const bottom = Math.max(box.y + box.height, b.y + b.height);
+    box.x = Math.min(box.x, b.x);
+    box.y = Math.min(box.y, b.y);
+    box.width = right - box.x;
+    box.height = bottom - box.y;
+  }
+  return box;
+}
+
 function tracePolyline(ctx: CanvasRenderingContext2D, points: Point[]) {
   ctx.moveTo(points[0].x, points[0].y);
   // Curve through midpoints so fast strokes don't look jagged.
@@ -90,7 +184,9 @@ function tracePolyline(ctx: CanvasRenderingContext2D, points: Point[]) {
   ctx.lineTo(last.x, last.y);
 }
 
+// Draws any element except fills, which only exist inside the fill raster.
 export function drawElement(ctx: CanvasRenderingContext2D, el: DrawElement) {
+  if (el.kind === "fill") return;
   ctx.save();
   ctx.strokeStyle = el.color;
   ctx.fillStyle = el.color;
@@ -155,10 +251,6 @@ export function drawElement(ctx: CanvasRenderingContext2D, el: DrawElement) {
       ctx.fillText(el.text, el.at.x, el.at.y);
       break;
     }
-    case "fill": {
-      floodFill(ctx, el.at, el.color);
-      break;
-    }
   }
   ctx.restore();
 }
@@ -175,20 +267,20 @@ function parseColor(ctx: CanvasRenderingContext2D, color: string) {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 255];
 }
 
-// Scanline flood fill over the pixels rendered so far.
-function floodFill(ctx: CanvasRenderingContext2D, at: Point, color: string) {
-  const W = CANVAS_WIDTH;
-  const H = CANVAS_HEIGHT;
-  const x0 = Math.floor(at.x);
-  const y0 = Math.floor(at.y);
-  if (x0 < 0 || y0 < 0 || x0 >= W || y0 >= H) return;
+// Scanline flood fill over the pixels rendered so far. On an infinite board an
+// open area has no edge, so a fill that leaks to the raster border is discarded:
+// only enclosed regions get filled. Returns whether anything was painted.
+function floodFill(ctx: CanvasRenderingContext2D, x0: number, y0: number, color: string) {
+  const W = ctx.canvas.width;
+  const H = ctx.canvas.height;
+  if (x0 < 0 || y0 < 0 || x0 >= W || y0 >= H) return false;
 
   const image = ctx.getImageData(0, 0, W, H);
   const data = image.data;
   const start = (y0 * W + x0) * 4;
   const target = [data[start], data[start + 1], data[start + 2], data[start + 3]];
   const fill = parseColor(ctx, color);
-  if (target.every((v, i) => Math.abs(v - fill[i]) < 3)) return;
+  if (target.every((v, i) => Math.abs(v - fill[i]) < 3)) return false;
 
   const done = new Uint8Array(W * H);
   const matches = (x: number, y: number) => {
@@ -213,6 +305,7 @@ function floodFill(ctx: CanvasRenderingContext2D, at: Point, color: string) {
     while (left > 0 && matches(left - 1, y)) left--;
     let right = x;
     while (right < W - 1 && matches(right + 1, y)) right++;
+    if (left === 0 || right === W - 1 || y === 0 || y === H - 1) return false;
     for (let cx = left; cx <= right; cx++) {
       const p = y * W + cx;
       done[p] = 1;
@@ -220,7 +313,6 @@ function floodFill(ctx: CanvasRenderingContext2D, at: Point, color: string) {
     }
     // Seed the rows above and below once per contiguous run.
     for (const ny of [y - 1, y + 1]) {
-      if (ny < 0 || ny >= H) continue;
       let inRun = false;
       for (let cx = left; cx <= right; cx++) {
         const ok = matches(cx, ny);
@@ -230,19 +322,79 @@ function floodFill(ctx: CanvasRenderingContext2D, at: Point, color: string) {
     }
   }
   ctx.putImageData(image, 0, 0);
+  return true;
 }
 
-// Flood fills read pixels, so they're slow; keep a snapshot of everything up to the
-// last fill and only redraw what came after it.
-const fillCache = new WeakMap<
-  CanvasRenderingContext2D,
-  { key: string; snapshot: HTMLCanvasElement }
->();
+// Flood fills work on pixels, so everything up to the last fill is rasterised once
+// in world space (independent of anyone's camera, so every client gets the same
+// result) and cached; only what came after it is drawn as vectors each frame.
+type Raster = { key: string; canvas: HTMLCanvasElement; box: Box; applied: Set<string> };
+const RASTER_PADDING = 8;
+const RASTER_MAX_PIXELS = 4_000_000;
+let rasterCache: Raster | null = null;
 
+function rasterKey(list: DrawElement[], lastFill: number) {
+  let points = 0;
+  for (let i = 0; i <= lastFill; i++) {
+    const el = list[i];
+    if (el.kind === "stroke") points += el.points.length;
+  }
+  return `${lastFill}:${list[0].id}:${list[lastFill].id}:${points}`;
+}
+
+function buildRaster(list: DrawElement[], lastFill: number): Raster | null {
+  const key = rasterKey(list, lastFill);
+  if (rasterCache?.key === key) return rasterCache;
+
+  const prefix = list.slice(0, lastFill + 1);
+  const bounds = sceneBounds(prefix);
+  if (!bounds) return null;
+  const box = {
+    x: bounds.x - RASTER_PADDING,
+    y: bounds.y - RASTER_PADDING,
+    width: bounds.width + RASTER_PADDING * 2,
+    height: bounds.height + RASTER_PADDING * 2,
+  };
+  // Up to 2x resolution for crisp fills when zoomed in, capped for memory.
+  const scale = Math.min(2, Math.sqrt(RASTER_MAX_PIXELS / (box.width * box.height)));
+  const canvas = rasterCache?.canvas ?? document.createElement("canvas");
+  canvas.width = Math.max(1, Math.ceil(box.width * scale));
+  canvas.height = Math.max(1, Math.ceil(box.height * scale));
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = CANVAS_BACKGROUND;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(scale, 0, 0, scale, -box.x * scale, -box.y * scale);
+  const applied = new Set<string>();
+  for (const el of prefix) {
+    if (el.kind !== "fill") {
+      drawElement(ctx, el);
+      continue;
+    }
+    const px = Math.floor((el.at.x - box.x) * scale);
+    const py = Math.floor((el.at.y - box.y) * scale);
+    if (floodFill(ctx, px, py, el.color)) applied.add(el.id);
+  }
+
+  rasterCache = { key, canvas, box, applied };
+  return rasterCache;
+}
+
+// Whether a fill at this spot would paint an enclosed region (and not leak out).
+export function fillWouldApply(elements: Iterable<DrawElement>, fill: FillElement) {
+  const list = [...Array.from(elements), fill];
+  return buildRaster(list, list.length - 1)?.applied.has(fill.id) ?? false;
+}
+
+// Renders the scene through `view`. `pixelRatio` maps CSS pixels to canvas pixels.
 export function renderScene(
   ctx: CanvasRenderingContext2D,
   elements: Iterable<DrawElement>,
-  preview?: DrawElement | null
+  preview: DrawElement | null,
+  view: View,
+  pixelRatio: number
 ) {
   const list = Array.from(elements);
   let lastFill = -1;
@@ -250,38 +402,61 @@ export function renderScene(
     if (el.kind === "fill") lastFill = i;
   });
 
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = CANVAS_BACKGROUND;
-  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
+  const k = pixelRatio * view.zoom;
+  ctx.setTransform(k, 0, 0, k, -view.x * k, -view.y * k);
+
+  let start = 0;
   if (lastFill >= 0) {
-    let points = 0;
-    for (let i = 0; i <= lastFill; i++) {
-      const el = list[i];
-      if (el.kind === "stroke") points += el.points.length;
-    }
-    const key = `${lastFill}:${list[0].id}:${list[lastFill].id}:${points}`;
-    const cached = fillCache.get(ctx);
-    if (cached?.key === key) {
-      ctx.drawImage(cached.snapshot, 0, 0);
-    } else {
-      for (let i = 0; i <= lastFill; i++) drawElement(ctx, list[i]);
-      const snapshot = cached?.snapshot ?? document.createElement("canvas");
-      snapshot.width = CANVAS_WIDTH;
-      snapshot.height = CANVAS_HEIGHT;
-      snapshot.getContext("2d")?.drawImage(ctx.canvas, 0, 0);
-      fillCache.set(ctx, { key, snapshot });
+    const raster = buildRaster(list, lastFill);
+    if (raster) {
+      ctx.drawImage(raster.canvas, raster.box.x, raster.box.y, raster.box.width, raster.box.height);
+      start = lastFill + 1;
     }
   }
-
-  for (let i = lastFill + 1; i < list.length; i++) drawElement(ctx, list[i]);
+  for (let i = start; i < list.length; i++) drawElement(ctx, list[i]);
   if (preview) drawElement(ctx, preview);
+}
+
+// Renders everything to a standalone canvas cropped to the drawing, for downloads.
+export function exportCanvas(elements: Iterable<DrawElement>, padding = 32, scale = 2) {
+  const list = Array.from(elements);
+  const bounds = sceneBounds(list);
+  if (!bounds) return null;
+  const width = bounds.width + padding * 2;
+  const height = bounds.height + padding * 2;
+  // Keep huge boards within what browsers can allocate.
+  const ratio = Math.min(scale, Math.sqrt(16_000_000 / (width * height)));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.ceil(width * ratio);
+  canvas.height = Math.ceil(height * ratio);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  renderScene(ctx, list, null, { x: bounds.x - padding, y: bounds.y - padding, zoom: 1 }, ratio);
+  return canvas;
 }
 
 const escapeXml = (s: string) =>
   s.replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-// Static SVG version of a drawing, used for room thumbnails on the server.
+// Static SVG version of a drawing, used for room thumbnails.
 export function elementsToSvg(elements: DrawElement[]) {
+  const bounds = sceneBounds(elements) ?? {
+    x: 0,
+    y: 0,
+    width: 1600,
+    height: 1000,
+  };
+  const pad = 24;
+  const viewBox = [
+    bounds.x - pad,
+    bounds.y - pad,
+    Math.max(bounds.width + pad * 2, 160),
+    Math.max(bounds.height + pad * 2, 100),
+  ].join(" ");
   const body = elements
     .map((el) => {
       const common = `stroke="${escapeXml(el.color)}" stroke-width="${el.size}" stroke-linecap="round" stroke-linejoin="round" fill="none"`;
@@ -312,5 +487,5 @@ export function elementsToSvg(elements: DrawElement[]) {
       }
     })
     .join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}"><rect width="100%" height="100%" fill="${CANVAS_BACKGROUND}"/>${body}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" preserveAspectRatio="xMidYMid meet"><rect x="-1e6" y="-1e6" width="2e6" height="2e6" fill="${CANVAS_BACKGROUND}"/>${body}</svg>`;
 }

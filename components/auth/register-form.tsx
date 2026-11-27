@@ -8,7 +8,7 @@ import z from "zod";
 import { Loader2 } from "lucide-react";
 import { RegisterSchema } from "@/utils/schema";
 import { api } from "@/lib/api";
-import { useAuth } from "@/components/auth/auth-provider";
+import { safeNext, withNext } from "@/lib/redirect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,8 +22,7 @@ import {
 import { GoogleButton, OrDivider } from "./google-button";
 import { FormError } from "./form-error";
 
-export function RegisterForm() {
-  const { refreshSession } = useAuth();
+export function RegisterForm({ next }: { next?: string }) {
   const [authError, setAuthError] = useState<string>();
   const form = useForm<z.infer<typeof RegisterSchema>>({
     resolver: zodResolver(RegisterSchema),
@@ -34,8 +33,8 @@ export function RegisterForm() {
     setAuthError(undefined);
     try {
       await api.register(values);
-      await refreshSession();
-      window.location.assign("/");
+      // A full load picks up the new session cookie everywhere.
+      window.location.assign(safeNext(next));
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Couldn't create your account.");
     }
@@ -52,7 +51,7 @@ export function RegisterForm() {
 
       <FormError message={authError} />
 
-      <GoogleButton />
+      <GoogleButton next={safeNext(next)} />
       <OrDivider />
 
       <Form {...form}>
@@ -122,7 +121,7 @@ export function RegisterForm() {
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/signin" className="font-medium text-primary hover:underline">
+        <Link href={withNext("/signin", safeNext(next))} className="font-medium text-primary hover:underline">
           Sign in
         </Link>
       </p>

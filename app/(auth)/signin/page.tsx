@@ -4,7 +4,8 @@ import { oauthErrorMessage } from "@/components/auth/form-error";
 export default function SignInPage({
   searchParams,
 }: {
-  searchParams: { error?: string | string[] };
+  searchParams: { error?: string | string[]; next?: string | string[] };
 }) {
-  return <SignInForm initialError={oauthErrorMessage(searchParams.error)} />;
+  const next = Array.isArray(searchParams.next) ? searchParams.next[0] : searchParams.next;
+  return <SignInForm initialError={oauthErrorMessage(searchParams.error)} next={next} />;
 }

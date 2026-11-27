@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowRight, Loader2, Lock, Plus } from "lucide-react";
+import { ArrowRight, Loader2, Lock, PenLine, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RoomIdSchema } from "@/utils/schema";
@@ -10,9 +11,15 @@ import { normalizeRoomId } from "@/lib/room";
 import { WS_URL } from "@/hooks/useRoomSocket";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { useAuth } from "@/components/auth/auth-provider";
+import { LoginPrompt } from "@/components/auth/login-prompt";
+
+type Prompt = { title: string; message: string; next: string };
 
 export default function RoomLauncher() {
   const router = useRouter();
+  const { user } = useAuth();
+  const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [roomId, setRoomId] = useState("");
   const [error, setError] = useState<string>();
   const [isPrivate, setIsPrivate] = useState(false);
@@ -29,6 +36,14 @@ export default function RoomLauncher() {
 
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) {
+      setPrompt({
+        title: "Sign in to create a room",
+        message: "Rooms are shared live with others, so they need an account. Drawing on your own doesn't.",
+        next: "/",
+      });
+      return;
+    }
     setCreating(true);
     setCreateError(undefined);
     try {
@@ -47,15 +62,36 @@ export default function RoomLauncher() {
       setError(parsed.error.issues[0]?.message);
       return;
     }
-    router.push(`/rooms/${normalizeRoomId(parsed.data)}`);
+    const path = `/rooms/${normalizeRoomId(parsed.data)}`;
+    if (!user) {
+      setPrompt({
+        title: "Sign in to join this room",
+        message: "You'll be taken straight into the room once you're signed in.",
+        next: path,
+      });
+      return;
+    }
+    router.push(path);
   };
 
   return (
     <div className="rounded-2xl border bg-card p-6 shadow-xl shadow-slate-200/60 sm:p-8 dark:shadow-black/30">
       <h2 className="text-lg font-semibold">Start drawing</h2>
       <p className="mb-5 text-sm text-muted-foreground">
-        Create a new room and share the code with others.
+        Sketch on your own right away — no account needed.
       </p>
+      <Button asChild variant="outline" className="h-12 w-full text-base">
+        <Link href="/draw">
+          <PenLine className="mr-2 size-5" />
+          Open a blank board
+        </Link>
+      </Button>
+
+      <div className="relative my-7 text-center text-xs uppercase tracking-wider text-muted-foreground">
+        <span className="absolute inset-x-0 top-1/2 h-px bg-border" />
+        <span className="relative bg-card px-3">or draw together</span>
+      </div>
+
       <form onSubmit={handleCreateRoom} className="space-y-3">
         <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
           <span className="flex items-center gap-2.5">
@@ -153,6 +189,7 @@ export default function RoomLauncher() {
         </div>
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       </form>
+      {prompt && <LoginPrompt {...prompt} onClose={() => setPrompt(null)} />}
     </div>
   );
 }

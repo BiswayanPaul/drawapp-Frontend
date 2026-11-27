@@ -13,10 +13,11 @@ export type SocketStatus = "connecting" | "open" | "reconnecting" | "denied";
 // Close code the realtime server uses when a room token is invalid or revoked.
 const ACCESS_REVOKED = 4003;
 
+// With no roomId (the solo board) nothing connects and send() always fails.
 export function useRoomSocket(
-  roomId: string,
+  roomId: string | null,
   token: string | null,
-  user: RoomUser,
+  user: RoomUser | null,
   onMessage: (message: ServerMessage) => void,
   onDenied: () => void
 ) {
@@ -33,6 +34,7 @@ export function useRoomSocket(
   });
 
   useEffect(() => {
+    if (!roomId) return;
     let attempt = 0;
     let retryTimer: ReturnType<typeof setTimeout>;
     let disposed = false;
@@ -56,7 +58,7 @@ export function useRoomSocket(
       ws.onopen = () => {
         attempt = 0;
         setStatus("open");
-        ws.send(JSON.stringify({ type: "join", user: userRef.current }));
+        if (userRef.current) ws.send(JSON.stringify({ type: "join", user: userRef.current }));
       };
       ws.onmessage = (event) => {
         try {

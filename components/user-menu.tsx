@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import {
   DropdownMenu,
@@ -15,15 +14,14 @@ import { api, type ApiUser } from "@/lib/api";
 import { useAuth } from "@/components/auth/auth-provider";
 
 export default function UserMenu({ user }: { user: ApiUser }) {
-  const router = useRouter();
   const { refreshSession } = useAuth();
 
   const signOut = async () => {
     try {
       await api.signOut();
     } finally {
+      // Pages react to the signed-out state themselves (public pages stay put).
       await refreshSession();
-      router.replace("/signin");
     }
   };
 

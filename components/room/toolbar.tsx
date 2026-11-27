@@ -5,10 +5,12 @@ import {
   Circle,
   Download,
   Eraser,
+  Hand,
   Highlighter,
   Minus,
   PaintBucket,
   Pencil,
+  Plus,
   Redo2,
   Square,
   Trash2,
@@ -31,6 +33,7 @@ export const COLORS = [
 export const SIZES = [4, 10, 24];
 
 export const TOOLS: { tool: Tool; label: string; key: string; icon: typeof Pencil }[] = [
+  { tool: "hand", label: "Hand — or hold Space", key: "m", icon: Hand },
   { tool: "pen", label: "Pen", key: "p", icon: Pencil },
   { tool: "highlighter", label: "Highlighter", key: "h", icon: Highlighter },
   { tool: "eraser", label: "Eraser", key: "e", icon: Eraser },
@@ -39,10 +42,50 @@ export const TOOLS: { tool: Tool; label: string; key: string; icon: typeof Penci
   { tool: "rect", label: "Rectangle", key: "r", icon: Square },
   { tool: "ellipse", label: "Ellipse", key: "o", icon: Circle },
   { tool: "text", label: "Text", key: "t", icon: Type },
-  { tool: "fill", label: "Fill", key: "f", icon: PaintBucket },
+  { tool: "fill", label: "Fill closed shape", key: "f", icon: PaintBucket },
 ];
 
-type ToolbarProps = {
+// Shared look for every floating panel over the board.
+export const PANEL =
+  "pointer-events-auto rounded-2xl border bg-card/95 shadow-xl backdrop-blur dark:shadow-black/40";
+
+// Tools: a vertical rail on the left on larger screens, a horizontal strip on phones.
+export function ToolRail({
+  tool,
+  onToolChange,
+  className,
+}: {
+  tool: Tool;
+  onToolChange: (tool: Tool) => void;
+  className?: string;
+}) {
+  return (
+    <div
+      role="toolbar"
+      aria-label="Drawing tools"
+      className={cn(
+        PANEL,
+        "flex max-w-full items-center gap-0.5 overflow-x-auto p-1.5 md:flex-col md:overflow-visible",
+        className
+      )}
+    >
+      {TOOLS.map(({ tool: t, label, key, icon: Icon }, i) => (
+        <span key={t} className="contents">
+          {i === 1 && <Divider className="md:mx-0 md:my-0.5 md:h-px md:w-6" />}
+          <ToolButton
+            label={`${label} (${key.toUpperCase()})`}
+            active={tool === t}
+            onClick={() => onToolChange(t)}
+          >
+            <Icon className="size-[18px]" />
+          </ToolButton>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+type StyleBarProps = {
   tool: Tool;
   onToolChange: (tool: Tool) => void;
   color: string;
@@ -55,9 +98,11 @@ type ToolbarProps = {
   onRedo: () => void;
   onDownload: () => void;
   onClear: () => void;
+  className?: string;
 };
 
-export function Toolbar({
+// Colour, size and board actions: floats along the bottom edge.
+export function StyleBar({
   tool,
   onToolChange,
   color,
@@ -70,38 +115,32 @@ export function Toolbar({
   onRedo,
   onDownload,
   onClear,
-}: ToolbarProps) {
+  className,
+}: StyleBarProps) {
   const pickColor = (c: string) => {
     onColorChange(c);
-    if (tool === "eraser") onToolChange("pen");
+    if (tool === "eraser" || tool === "hand") onToolChange("pen");
   };
+  const showActive = tool !== "eraser" && tool !== "hand";
 
   return (
-    <div className="flex max-w-full flex-wrap items-center justify-center gap-1 rounded-2xl border bg-card/95 p-1.5 shadow-xl backdrop-blur sm:p-2 dark:shadow-black/40">
-      <div className="flex flex-wrap items-center justify-center gap-0.5">
-        {TOOLS.map(({ tool: t, label, key, icon: Icon }) => (
-          <ToolButton
-            key={t}
-            label={`${label} (${key.toUpperCase()})`}
-            active={tool === t}
-            onClick={() => onToolChange(t)}
-          >
-            <Icon className="size-[18px]" />
-          </ToolButton>
-        ))}
-      </div>
-
-      <Divider />
-
-      <div className="flex items-center gap-1.5 px-1">
+    <div
+      className={cn(
+        PANEL,
+        "flex max-w-full items-center gap-1 overflow-x-auto p-1.5 [scrollbar-width:none]",
+        className
+      )}
+    >
+      <div className="flex shrink-0 items-center gap-1.5 px-1">
         {COLORS.map((c) => (
           <button
             key={c}
+            type="button"
             aria-label={`Color ${c}`}
             onClick={() => pickColor(c)}
             className={cn(
               "size-6 shrink-0 rounded-full shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)] ring-offset-2 ring-offset-card transition hover:scale-110 sm:size-7 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.3)]",
-              color === c && tool !== "eraser" && "ring-2 ring-foreground"
+              color === c && showActive && "ring-2 ring-foreground"
             )}
             style={{ backgroundColor: c }}
           />
@@ -109,7 +148,7 @@ export function Toolbar({
         <label
           className={cn(
             "relative size-6 shrink-0 cursor-pointer overflow-hidden rounded-full bg-[conic-gradient(red,yellow,lime,cyan,blue,magenta,red)] ring-offset-2 ring-offset-card transition hover:scale-110 sm:size-7",
-            !COLORS.includes(color) && tool !== "eraser" && "ring-2 ring-foreground"
+            !COLORS.includes(color) && showActive && "ring-2 ring-foreground"
           )}
           title="Custom color"
         >
@@ -124,7 +163,7 @@ export function Toolbar({
 
       <Divider />
 
-      <div className="flex items-center gap-0.5">
+      <div className="flex shrink-0 items-center gap-0.5">
         {SIZES.map((s) => (
           <ToolButton
             key={s}
@@ -138,7 +177,11 @@ export function Toolbar({
             />
           </ToolButton>
         ))}
-        <Divider />
+      </div>
+
+      <Divider />
+
+      <div className="flex shrink-0 items-center gap-0.5">
         <ToolButton label="Undo (Ctrl+Z)" onClick={onUndo} disabled={!canUndo}>
           <Undo2 className="size-[18px]" />
         </ToolButton>
@@ -148,10 +191,43 @@ export function Toolbar({
         <ToolButton label="Download PNG" onClick={onDownload}>
           <Download className="size-[18px]" />
         </ToolButton>
-        <ToolButton label="Clear canvas" onClick={onClear} danger>
+        <ToolButton label="Clear board" onClick={onClear} danger>
           <Trash2 className="size-[18px]" />
         </ToolButton>
       </div>
+    </div>
+  );
+}
+
+export function ZoomControls({
+  zoom,
+  onZoomIn,
+  onZoomOut,
+  onReset,
+  className,
+}: {
+  zoom: number;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onReset: () => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn(PANEL, "flex items-center gap-0.5 p-1", className)}>
+      <ToolButton label="Zoom out (Ctrl -)" onClick={onZoomOut}>
+        <Minus className="size-4" />
+      </ToolButton>
+      <button
+        type="button"
+        onClick={onReset}
+        title="Reset view (Ctrl 0)"
+        className="h-9 min-w-[3.5rem] rounded-xl px-1.5 text-xs font-medium tabular-nums text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+      >
+        {Math.round(zoom * 100)}%
+      </button>
+      <ToolButton label="Zoom in (Ctrl +)" onClick={onZoomIn}>
+        <Plus className="size-4" />
+      </ToolButton>
     </div>
   );
 }
@@ -193,6 +269,6 @@ function ToolButton({
   );
 }
 
-function Divider() {
-  return <span className="mx-1 hidden h-6 w-px shrink-0 bg-border sm:block" />;
+function Divider({ className }: { className?: string }) {
+  return <span className={cn("mx-0.5 h-6 w-px shrink-0 bg-border", className)} />;
 }

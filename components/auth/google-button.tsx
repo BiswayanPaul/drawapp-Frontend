@@ -3,13 +3,14 @@
 import { FcGoogle } from "react-icons/fc";
 import { Button } from "@/components/ui/button";
 import { googleSignInUrl } from "@/lib/api";
+import { safeNext } from "@/lib/redirect";
 
-export function GoogleButton() {
+export function GoogleButton({ next = "/" }: { next?: string }) {
   return (
     <Button
       type="button"
       variant="outline"
-      onClick={() => window.location.assign(googleSignInUrl())}
+      onClick={() => window.location.assign(googleSignInUrl(safeNext(next)))}
       className="h-11 w-full gap-2 bg-card"
     >
       <FcGoogle className="size-5" />

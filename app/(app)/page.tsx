@@ -30,12 +30,17 @@ export default function Home() {
   const [recentRooms, setRecentRooms] = useState<RecentRoom[]>([]);
   const firstName = user?.name?.split(" ")[0];
 
+  // Recent rooms belong to an account; guests simply don't see the section.
   useEffect(() => {
+    if (!user) {
+      setRecentRooms([]);
+      return;
+    }
     api
       .recentRooms()
       .then(({ rooms }) => setRecentRooms(rooms))
       .catch(() => setRecentRooms([]));
-  }, []);
+  }, [user]);
 
   return (
     <div className="bg-dots flex flex-1 flex-col justify-center">
@@ -51,8 +56,8 @@ export default function Home() {
             </span>
           </h1>
           <p className="mt-4 max-w-lg text-base text-muted-foreground sm:text-lg">
-            Start a fresh canvas and invite anyone with a short room code. No
-            setup, no installs.
+            Open an infinite board and start sketching — no sign-up. Sign in to
+            invite anyone with a short room code.
           </p>
         </div>
         {/* On phones the launcher sits right under the headline; on desktop it gets its own column. */}

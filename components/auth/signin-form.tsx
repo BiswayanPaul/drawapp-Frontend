@@ -8,7 +8,7 @@ import z from "zod";
 import { Loader2 } from "lucide-react";
 import { CredentialSchema } from "@/utils/schema";
 import { api } from "@/lib/api";
-import { useAuth } from "@/components/auth/auth-provider";
+import { safeNext, withNext } from "@/lib/redirect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,8 +22,7 @@ import {
 import { GoogleButton, OrDivider } from "./google-button";
 import { FormError } from "./form-error";
 
-export function SignInForm({ initialError }: { initialError?: string }) {
-  const { refreshSession } = useAuth();
+export function SignInForm({ initialError, next }: { initialError?: string; next?: string }) {
   const [authError, setAuthError] = useState(initialError);
   const form = useForm<z.infer<typeof CredentialSchema>>({
     resolver: zodResolver(CredentialSchema),
@@ -34,8 +33,8 @@ export function SignInForm({ initialError }: { initialError?: string }) {
     setAuthError(undefined);
     try {
       await api.signIn(values);
-      await refreshSession();
-      window.location.assign("/");
+      // A full load picks up the new session cookie everywhere.
+      window.location.assign(safeNext(next));
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Couldn't sign you in.");
     }
@@ -52,7 +51,7 @@ export function SignInForm({ initialError }: { initialError?: string }) {
 
       <FormError message={authError} />
 
-      <GoogleButton />
+      <GoogleButton next={safeNext(next)} />
       <OrDivider />
 
       <Form {...form}>
@@ -105,7 +104,7 @@ export function SignInForm({ initialError }: { initialError?: string }) {
       <p className="mt-6 text-center text-sm text-muted-foreground">
         Don&apos;t have an account?{" "}
         <Link
-          href="/register"
+          href={withNext("/register", safeNext(next))}
           className="font-medium text-primary hover:underline"
         >
           Create one

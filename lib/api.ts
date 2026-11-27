@@ -81,4 +81,5 @@ export const api = {
     }),
 };
 
-export const googleSignInUrl = () => `${API_URL}/api/auth/google`;
+export const googleSignInUrl = (next = "/") =>
+  `${API_URL}/api/auth/google${next === "/" ? "" : `?next=${encodeURIComponent(next)}`}`;

@@ -1,5 +1,6 @@
-import { CANVAS_HEIGHT, CANVAS_WIDTH, type Member } from "@/lib/drawing";
+import { toScreen, type Member, type View } from "@/lib/drawing";
 
+// x/y are world coordinates; they're projected through this client's camera.
 export type RemoteCursor = { x: number; y: number; seen: number };
 
 const CURSOR_COLORS = ["#e11d48", "#2563eb", "#16a34a", "#d97706", "#9333ea", "#0891b2"];
@@ -13,24 +14,23 @@ function colorFor(id: string) {
 export function RemoteCursors({
   cursors,
   members,
+  view,
 }: {
   cursors: Record<string, RemoteCursor>;
   members: Member[];
+  view: View;
 }) {
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
       {Object.entries(cursors).map(([id, cursor]) => {
-        if (cursor.x < 0) return null;
         const color = colorFor(id);
         const name = members.find((m) => m.connectionId === id)?.name ?? "Guest";
+        const at = toScreen(view, cursor);
         return (
           <div
             key={id}
-            className="absolute left-0 top-0 transition-[left,top] duration-75 ease-linear"
-            style={{
-              left: `${(cursor.x / CANVAS_WIDTH) * 100}%`,
-              top: `${(cursor.y / CANVAS_HEIGHT) * 100}%`,
-            }}
+            className="absolute left-0 top-0 will-change-transform"
+            style={{ transform: `translate(${at.x}px, ${at.y}px)` }}
           >
             <svg width="18" height="18" viewBox="0 0 18 18" className="drop-shadow">
               <path
