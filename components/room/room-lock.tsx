@@ -32,7 +32,7 @@ export default function RoomLock({ roomId, onUnlocked }: { roomId: string; onUnl
       <span className="mx-auto mb-4 inline-flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
         <Lock className="size-6" />
       </span>
-      <h1 className="text-xl font-bold">This room is private</h1>
+      <h1 className="font-display text-3xl font-bold">This room is private</h1>
       <p className="mb-6 mt-1 text-sm text-muted-foreground">
         Enter the password for room{" "}
         <span className="font-mono font-semibold tracking-widest text-foreground">

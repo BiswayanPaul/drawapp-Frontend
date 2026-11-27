@@ -29,7 +29,9 @@ import {
   newId,
   renderScene,
   sceneBounds,
+  textAt,
   textFontSize,
+  textSize,
   toScreen,
   toWorld,
   zoomAt,
@@ -79,7 +81,19 @@ type Gesture =
   // A pinch ended: ignore the remaining finger until it lifts too.
   | { kind: "ended" };
 
-type TextDraft = { at: Point; value: string };
+// Text being typed. fontSize is in world units; id is set when re-editing placed text.
+type TextDraft = {
+  at: Point;
+  value: string;
+  fontSize: number;
+  font: TextFont;
+  color: string;
+  id?: string;
+};
+
+// On-screen font size limits for the text resize handle.
+const MIN_TEXT_PX = 8;
+const MAX_TEXT_PX = 400;
 
 // Shift snaps lines to 45° and makes rectangles/ellipses square.
 function constrain(from: Point, to: Point, kind: ShapeElement["kind"]): Point {
@@ -167,6 +181,9 @@ export default function Whiteboard({
   const [textDraft, setTextDraftState] = useState<TextDraft | null>(null);
   // Mirrors textDraft so Enter + blur can't commit the same text twice.
   const textDraftRef = useRef<TextDraft | null>(null);
+  // Placed text being re-edited is hidden from the canvas while the box shows it.
+  const editingId = useRef<string | null>(null);
+  const textResize = useRef<{ x: number; y: number; px: number } | null>(null);
   const setTextDraft = (draft: TextDraft | null) => {
     textDraftRef.current = draft;
     setTextDraftState(draft);
@@ -185,7 +202,9 @@ export default function Whiteboard({
     if (ctx) {
       renderScene(
         ctx,
-        elements.current.values(),
+        editingId.current
+          ? Array.from(elements.current.values()).filter((el) => el.id !== editingId.current)
+          : elements.current.values(),
         preview.current,
         viewRef.current,
         pixelRatio.current,
@@ -666,7 +685,29 @@ export default function Whiteboard({
     if (tool === "text") {
       e.preventDefault();
       if (textDraftRef.current) commitText();
-      setTextDraft({ at: point, value: "" });
+      const hit = textAt(elements.current.values(), point);
+      if (hit) {
+        // Clicking placed text reopens it for editing and resizing.
+        editingId.current = hit.id;
+        setTextDraft({
+          at: hit.at,
+          value: hit.text,
+          fontSize: textSize(hit),
+          font: hit.font ?? "sans",
+          color: hit.color,
+          id: hit.id,
+        });
+        render();
+        return;
+      }
+      // Size the text for the screen, not the world, so it reads the same at any zoom.
+      setTextDraft({
+        at: point,
+        value: "",
+        fontSize: textFontSize(size) / viewRef.current.zoom,
+        font,
+        color,
+      });
       return;
     }
 
@@ -776,18 +817,59 @@ export default function Whiteboard({
   function commitText() {
     const draft = textDraftRef.current;
     setTextDraft(null);
-    if (!draft?.value.trim()) return;
+    editingId.current = null;
+    if (!draft) return;
+    const text = draft.value.trim();
+    if (!text) {
+      // Emptying re-edited text deletes it.
+      if (draft.id) {
+        apply({ type: "remove", id: draft.id });
+        emit({ type: "remove", id: draft.id });
+      }
+      render();
+      return;
+    }
     commit({
-      id: newId(),
+      id: draft.id ?? newId(),
       kind: "text",
       at: draft.at,
-      text: draft.value.trim(),
-      color,
+      text,
+      color: draft.color,
       size,
-      ...(font !== "sans" ? { font } : {}),
+      fontSize: Math.round(draft.fontSize * 10) / 10,
+      ...(draft.font !== "sans" ? { font: draft.font } : {}),
     });
     render();
   }
+
+  const cancelText = () => {
+    setTextDraft(null);
+    editingId.current = null;
+    render();
+  };
+
+  // Corner handle: drag to scale the text. preventDefault keeps the input focused.
+  const onResizeStart = (e: React.PointerEvent<HTMLSpanElement>) => {
+    const draft = textDraftRef.current;
+    if (!draft) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    textResize.current = { x: e.clientX, y: e.clientY, px: draft.fontSize * viewRef.current.zoom };
+  };
+
+  const onResizeMove = (e: React.PointerEvent<HTMLSpanElement>) => {
+    const start = textResize.current;
+    const draft = textDraftRef.current;
+    if (!start || !draft) return;
+    const delta = (e.clientX - start.x + (e.clientY - start.y)) / 2;
+    const px = Math.min(MAX_TEXT_PX, Math.max(MIN_TEXT_PX, start.px + delta));
+    setTextDraft({ ...draft, fontSize: px / viewRef.current.zoom });
+  };
+
+  const onResizeEnd = () => {
+    textResize.current = null;
+  };
 
   const handleClear = () => {
     const question = room
@@ -901,28 +983,39 @@ export default function Whiteboard({
       <div className="pointer-events-none absolute inset-0">
         {room && <RemoteCursors cursors={cursors} members={members} view={view} />}
         {textDraft && draftAt && (
-          <input
-            autoFocus
-            value={textDraft.value}
-            onChange={(e) => setTextDraft({ ...textDraft, value: e.target.value })}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitText();
-              if (e.key === "Escape") setTextDraft(null);
-            }}
-            onBlur={commitText}
-            placeholder="Type…"
-            maxLength={500}
-            className="pointer-events-auto absolute min-w-[8ch] rounded border border-dashed border-indigo-400 bg-transparent px-0.5 leading-none outline-none placeholder:text-slate-400"
-            style={{
-              left: draftAt.x,
-              top: draftAt.y,
-              fontSize: textFontSize(size) * view.zoom,
-              fontFamily: textFont(font).family,
-              fontWeight: textFont(font).weight,
-              color,
-              width: `${Math.max(textDraft.value.length + 2, 8)}ch`,
-            }}
-          />
+          <div className="pointer-events-auto absolute" style={{ left: draftAt.x, top: draftAt.y }}>
+            <input
+              autoFocus
+              value={textDraft.value}
+              onChange={(e) => setTextDraft({ ...textDraft, value: e.target.value })}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitText();
+                if (e.key === "Escape") cancelText();
+              }}
+              onBlur={() => {
+                if (!textResize.current) commitText();
+              }}
+              placeholder="Type…"
+              maxLength={500}
+              className="block min-w-[4ch] rounded border border-dashed border-indigo-400 bg-transparent px-0.5 leading-none outline-none placeholder:text-slate-400"
+              style={{
+                fontSize: textDraft.fontSize * view.zoom,
+                fontFamily: textFont(textDraft.font).family,
+                fontWeight: textFont(textDraft.font).weight,
+                color: textDraft.color,
+                width: `${Math.max(textDraft.value.length + 2, 6)}ch`,
+              }}
+            />
+            <span
+              role="presentation"
+              title="Drag to resize"
+              onPointerDown={onResizeStart}
+              onPointerMove={onResizeMove}
+              onPointerUp={onResizeEnd}
+              onPointerCancel={onResizeEnd}
+              className="absolute -bottom-2 -right-2 size-4 cursor-nwse-resize touch-none rounded-full border-2 border-indigo-500 bg-white shadow"
+            />
+          </div>
         )}
       </div>
 
@@ -935,7 +1028,7 @@ export default function Whiteboard({
             className="flex shrink-0 items-center gap-2 px-2.5 py-1.5 font-semibold transition hover:opacity-80"
           >
             <Image src={paintBrush} alt="" width={24} height={24} />
-            <span className={cn("text-sm", room && "hidden lg:inline")}>DrawApp</span>
+            <span className={cn("font-display text-2xl font-bold leading-none", room && "hidden lg:inline")}>DrawApp</span>
           </Link>
           {room ? (
             <>

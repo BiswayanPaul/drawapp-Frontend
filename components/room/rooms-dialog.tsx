@@ -89,7 +89,7 @@ export function RoomsDialog({
 
   return (
     <GlassDialog onClose={onClose} labelledBy="rooms-title" className="max-w-lg">
-      <h2 id="rooms-title" className="pr-6 text-xl font-bold">
+      <h2 id="rooms-title" className="pr-6 font-display text-4xl font-bold">
         Draw together
       </h2>
       <p className="mb-5 mt-1 text-sm text-muted-foreground">
@@ -191,7 +191,7 @@ export function RoomsDialog({
 
       {user && recent && recent.length > 0 && (
         <section className="mt-7">
-          <h3 className="mb-3 text-sm font-semibold">Recent rooms</h3>
+          <h3 className="mb-3 font-display text-2xl font-bold">Recent rooms</h3>
           <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             {recent.map((room) => (
               <li key={room.id}>

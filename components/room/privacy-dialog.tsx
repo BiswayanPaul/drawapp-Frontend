@@ -81,7 +81,7 @@ function PrivacyDialog({
 
   return (
     <GlassDialog onClose={onClose} labelledBy="privacy-title">
-      <h2 id="privacy-title" className="mb-1 pr-6 text-lg font-semibold">
+      <h2 id="privacy-title" className="mb-1 pr-6 font-display text-3xl font-bold">
         {isPrivate ? "Private room" : "Make this room private"}
       </h2>
       <p className="mb-5 text-sm text-muted-foreground">

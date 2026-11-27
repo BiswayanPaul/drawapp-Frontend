@@ -22,7 +22,7 @@ function PromptBody({ title, message, next, onEmail }: PromptProps) {
       <span className="mb-4 inline-flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
         <LogIn className="size-6" />
       </span>
-      <h2 id="login-prompt-title" className="text-xl font-bold">
+      <h2 id="login-prompt-title" className="font-display text-3xl font-bold leading-tight">
         {title}
       </h2>
       <p className="mb-6 mt-1 text-sm text-muted-foreground">{message}</p>

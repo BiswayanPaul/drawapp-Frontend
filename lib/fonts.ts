@@ -1,6 +1,7 @@
 import {
   Bangers,
   Caveat,
+  Kalam,
   Pacifico,
   Permanent_Marker,
   Playfair_Display,
@@ -11,7 +12,12 @@ import {
 // must match the backend's allowlist (drawapp-backend/src/elements.ts).
 export type TextFont = "sans" | "hand" | "marker" | "script" | "serif" | "mono" | "comic";
 
-const caveat = Caveat({ subsets: ["latin"], display: "swap" });
+const caveat = Caveat({ subsets: ["latin"], display: "swap", variable: "--font-display" });
+
+// The site's own type: Kalam (a readable handwritten face) for all UI text, and
+// Caveat for headings. Their CSS variables are set on <html> in app/layout.tsx.
+const kalam = Kalam({ subsets: ["latin"], weight: ["300", "400", "700"], display: "swap", variable: "--font-ui" });
+export const UI_FONT_VARIABLES = `${kalam.variable} ${caveat.variable}`;
 const marker = Permanent_Marker({ subsets: ["latin"], weight: "400", display: "swap" });
 const pacifico = Pacifico({ subsets: ["latin"], weight: "400", display: "swap" });
 const playfair = Playfair_Display({ subsets: ["latin"], display: "swap" });

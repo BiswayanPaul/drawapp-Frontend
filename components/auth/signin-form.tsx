@@ -51,7 +51,7 @@ export function SignInForm({
 
   return (
     <div className="text-left">
-      <h1 id="auth-title" className="pr-6 text-2xl font-bold">Welcome back</h1>
+      <h1 id="auth-title" className="pr-6 font-display text-4xl font-bold">Welcome back</h1>
       <p className="mb-6 mt-1 text-sm text-muted-foreground">
         Sign in to create or join a drawing room.
       </p>

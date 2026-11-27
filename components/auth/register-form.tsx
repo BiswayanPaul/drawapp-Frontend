@@ -43,7 +43,7 @@ export function RegisterForm({ next, onSwitch }: { next?: string; onSwitch: () =
 
   return (
     <div className="text-left">
-      <h1 id="auth-title" className="pr-6 text-2xl font-bold">Create your account</h1>
+      <h1 id="auth-title" className="pr-6 font-display text-4xl font-bold">Create your account</h1>
       <p className="mb-6 mt-1 text-sm text-muted-foreground">
         It takes ten seconds. Then start drawing.
       </p>

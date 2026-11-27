@@ -56,7 +56,15 @@ export type ShapeElement = Base & {
   from: Point;
   to: Point;
 };
-export type TextElement = Base & { kind: "text"; at: Point; text: string; font?: TextFont };
+// fontSize is in world units; text placed while zoomed out is bigger in the world so
+// it looks the same on screen. Older text has none and derives it from `size`.
+export type TextElement = Base & {
+  kind: "text";
+  at: Point;
+  text: string;
+  font?: TextFont;
+  fontSize?: number;
+};
 export type FillElement = Base & { kind: "fill"; at: Point };
 export type DrawElement = StrokeElement | ShapeElement | TextElement | FillElement;
 
@@ -90,6 +98,7 @@ export type ClientMessage =
   | { type: "cursor-leave" };
 
 export const textFontSize = (size: number) => 16 + size * 2;
+export const textSize = (el: TextElement) => el.fontSize ?? textFontSize(el.size);
 
 export function newId() {
   return crypto.randomUUID().replace(/-/g, "").slice(0, 16);
@@ -110,8 +119,8 @@ function textWidth(el: TextElement) {
   if (!measureCtx && typeof document !== "undefined") {
     measureCtx = document.createElement("canvas").getContext("2d");
   }
-  if (!measureCtx) return el.text.length * textFontSize(el.size) * 0.6;
-  measureCtx.font = canvasFont(el.font, textFontSize(el.size));
+  if (!measureCtx) return el.text.length * textSize(el) * 0.6;
+  measureCtx.font = canvasFont(el.font, textSize(el));
   return measureCtx.measureText(el.text).width;
 }
 
@@ -147,10 +156,31 @@ export function elementBounds(el: DrawElement): Box | null {
       };
     }
     case "text":
-      return { x: el.at.x, y: el.at.y, width: textWidth(el), height: textFontSize(el.size) * 1.2 };
+      return { x: el.at.x, y: el.at.y, width: textWidth(el), height: textSize(el) * 1.2 };
     case "fill":
       return { x: el.at.x, y: el.at.y, width: 0, height: 0 };
   }
+}
+
+// Topmost text under a point, for re-editing placed text.
+export function textAt(elements: Iterable<DrawElement>, point: Point): TextElement | null {
+  const list = Array.from(elements);
+  for (let i = list.length - 1; i >= 0; i--) {
+    const el = list[i];
+    if (el.kind !== "text") continue;
+    const b = elementBounds(el);
+    const pad = textSize(el) * 0.15;
+    if (
+      b &&
+      point.x >= b.x - pad &&
+      point.x <= b.x + b.width + pad &&
+      point.y >= b.y - pad &&
+      point.y <= b.y + b.height + pad
+    ) {
+      return el;
+    }
+  }
+  return null;
 }
 
 export function sceneBounds(elements: Iterable<DrawElement>): Box | null {
@@ -248,7 +278,7 @@ export function drawElement(ctx: CanvasRenderingContext2D, el: DrawElement) {
       break;
     }
     case "text": {
-      ctx.font = canvasFont(el.font, textFontSize(el.size));
+      ctx.font = canvasFont(el.font, textSize(el));
       ctx.textBaseline = "top";
       ctx.fillText(el.text, el.at.x, el.at.y);
       break;
@@ -543,7 +573,7 @@ export function elementsToSvg(elements: DrawElement[]) {
         case "ellipse":
           return `<ellipse cx="${(el.from.x + el.to.x) / 2}" cy="${(el.from.y + el.to.y) / 2}" rx="${Math.abs(el.to.x - el.from.x) / 2}" ry="${Math.abs(el.to.y - el.from.y) / 2}" ${common}/>`;
         case "text":
-          return `<text x="${el.at.x}" y="${el.at.y}" dominant-baseline="hanging" font-family="${escapeXml(textFont(el.font).family)}" font-weight="${textFont(el.font).weight}" font-size="${textFontSize(el.size)}" fill="${escapeXml(el.color)}">${escapeXml(el.text)}</text>`;
+          return `<text x="${el.at.x}" y="${el.at.y}" dominant-baseline="hanging" font-family="${escapeXml(textFont(el.font).family)}" font-weight="${textFont(el.font).weight}" font-size="${textSize(el)}" fill="${escapeXml(el.color)}">${escapeXml(el.text)}</text>`;
         case "fill":
           // Flood fills depend on rendered pixels; thumbnails skip them.
           return "";
