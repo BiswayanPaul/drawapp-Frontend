@@ -116,3 +116,62 @@
     background-size: auto, auto, 22px 22px;
   }
 }
+
+/* Brush size slider: the track fills up to the thumb (--fill set inline). */
+@layer components {
+  .size-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 1.5rem;
+    background: transparent;
+    cursor: pointer;
+  }
+  .size-slider::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 9999px;
+    background: linear-gradient(
+      to right,
+      hsl(var(--primary)) var(--fill, 0%),
+      hsl(var(--foreground) / 0.15) var(--fill, 0%)
+    );
+  }
+  .size-slider::-moz-range-track {
+    height: 6px;
+    border-radius: 9999px;
+    background: hsl(var(--foreground) / 0.15);
+  }
+  .size-slider::-moz-range-progress {
+    height: 6px;
+    border-radius: 9999px;
+    background: hsl(var(--primary));
+  }
+  .size-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    margin-top: -5px;
+    width: 16px;
+    height: 16px;
+    border-radius: 9999px;
+    background: #fff;
+    border: 2px solid hsl(var(--primary));
+    box-shadow: 0 1px 4px rgb(15 23 42 / 0.25);
+    transition: transform 0.1s;
+  }
+  .size-slider::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border-radius: 9999px;
+    background: #fff;
+    border: 2px solid hsl(var(--primary));
+    box-shadow: 0 1px 4px rgb(15 23 42 / 0.25);
+  }
+  .size-slider:active::-webkit-slider-thumb {
+    transform: scale(1.15);
+  }
+  .size-slider:focus-visible {
+    outline: none;
+  }
+  .size-slider:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.4);
+  }
+}

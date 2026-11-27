@@ -42,7 +42,10 @@ export const COLORS = [
   "#8b5cf6",
   "#ec4899",
 ];
-export const SIZES = [4, 10, 24];
+// Brush size range for the slider (highlighter and eraser draw 2.5x wider).
+export const MIN_SIZE = 1;
+export const MAX_SIZE = 50;
+export const DEFAULT_SIZE = 4;
 
 export const TOOLS: { tool: Tool; label: string; key: string; icon: typeof Pencil }[] = [
   { tool: "hand", label: "Hand — or hold Space", key: "m", icon: Hand },
@@ -189,21 +192,7 @@ export function StyleBar({
 
       <Divider />
 
-      <div className="flex shrink-0 items-center gap-0.5">
-        {SIZES.map((s) => (
-          <ToolButton
-            key={s}
-            label={`Size ${s}`}
-            active={size === s}
-            onClick={() => onSizeChange(s)}
-          >
-            <span
-              className="rounded-full bg-foreground"
-              style={{ width: 4 + s / 2, height: 4 + s / 2 }}
-            />
-          </ToolButton>
-        ))}
-      </div>
+      <SizeSlider size={size} color={tool === "eraser" ? "#ffffff" : color} onChange={onSizeChange} />
 
       <Divider />
 
@@ -221,6 +210,42 @@ export function StyleBar({
           <Trash2 className="size-[18px]" />
         </ToolButton>
       </div>
+    </div>
+  );
+}
+
+// Drag for any brush size; the dot previews it (capped so it fits the bar).
+function SizeSlider({
+  size,
+  color,
+  onChange,
+}: {
+  size: number;
+  color: string;
+  onChange: (size: number) => void;
+}) {
+  const dot = Math.max(3, Math.min(size, 26));
+  const fill = ((size - MIN_SIZE) / (MAX_SIZE - MIN_SIZE)) * 100;
+  return (
+    <div className="flex shrink-0 items-center gap-2 px-1.5" title="Brush size ( [ and ] )">
+      <span className="flex size-7 shrink-0 items-center justify-center">
+        <span
+          className="rounded-full shadow-[0_0_0_1px_rgba(100,116,139,0.45)] transition-[width,height]"
+          style={{ width: dot, height: dot, backgroundColor: color }}
+        />
+      </span>
+      <input
+        type="range"
+        min={MIN_SIZE}
+        max={MAX_SIZE}
+        step={1}
+        value={size}
+        onChange={(e) => onChange(Number(e.target.value))}
+        aria-label="Brush size"
+        className="size-slider w-24 sm:w-28"
+        style={{ "--fill": `${fill}%` } as React.CSSProperties}
+      />
+      <span className="w-6 text-right text-xs tabular-nums text-muted-foreground">{size}</span>
     </div>
   );
 }

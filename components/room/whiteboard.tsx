@@ -47,7 +47,18 @@ import { RoomsDialog } from "./rooms-dialog";
 import { ConfirmDialog } from "@/components/ui/glass-dialog";
 import UserMenu from "@/components/user-menu";
 import { PeopleMenu, StatusBadge } from "./people-menu";
-import { COLORS, GRID_NEXT, PANEL, SIZES, StyleBar, TOOLS, ToolRail, ZoomControls } from "./toolbar";
+import {
+  COLORS,
+  DEFAULT_SIZE,
+  GRID_NEXT,
+  MAX_SIZE,
+  MIN_SIZE,
+  PANEL,
+  StyleBar,
+  TOOLS,
+  ToolRail,
+  ZoomControls,
+} from "./toolbar";
 import { RemoteCursor, RemoteCursors } from "./remote-cursors";
 import { PrivacyButton } from "./privacy-dialog";
 
@@ -170,7 +181,7 @@ export default function Whiteboard({
   const [view, setViewState] = useState<View>(DEFAULT_VIEW);
   const [tool, setTool] = useState<Tool>("pen");
   const [color, setColor] = useState(COLORS[0]);
-  const [size, setSize] = useState(SIZES[0]);
+  const [size, setSize] = useState(DEFAULT_SIZE);
   const [font, setFont] = useState<TextFont>("sans");
   const [grid, setGridState] = useState<GridMode>("lines");
   const gridRef = useRef<GridMode>("lines");
@@ -587,6 +598,12 @@ export default function Whiteboard({
       } else if (mod && key === "0") {
         e.preventDefault();
         fitToContent();
+      } else if (!mod && (e.key === "[" || e.key === "]")) {
+        // Brush size: smaller steps at small sizes.
+        const step = size < 10 ? 1 : 5;
+        setSize((current) =>
+          Math.min(MAX_SIZE, Math.max(MIN_SIZE, current + (e.key === "]" ? step : -step)))
+        );
       } else if (!mod && !e.altKey && key === "g") {
         setGrid(GRID_NEXT[gridRef.current]);
       } else if (!mod && !e.altKey) {
