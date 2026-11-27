@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, Link2, LogOut, Trash2, Users } from "lucide-react";
+import { Check, Link2, Trash2, Users } from "lucide-react";
 import paintBrush from "@/app/fonts/paintbrush.png";
 import { cn } from "@/lib/utils";
 import {
@@ -42,11 +42,10 @@ import { useRoomSocket } from "@/hooks/useRoomSocket";
 import { useAuth } from "@/components/auth/auth-provider";
 import { LoginPrompt } from "@/components/auth/login-prompt";
 import { AuthDialog, type AuthMode } from "@/components/auth/auth-dialog";
-import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { RoomsDialog } from "./rooms-dialog";
 import { ConfirmDialog } from "@/components/ui/glass-dialog";
-import UserMenu from "@/components/user-menu";
-import { PeopleMenu, StatusBadge } from "./people-menu";
+import { PeopleMenu } from "./people-menu";
+import { BoardMenu } from "./board-menu";
 import {
   COLORS,
   DEFAULT_SIZE,
@@ -60,7 +59,7 @@ import {
   ZoomControls,
 } from "./toolbar";
 import { RemoteCursor, RemoteCursors } from "./remote-cursors";
-import { PrivacyButton } from "./privacy-dialog";
+import { PrivacyDialog } from "./privacy-dialog";
 
 const MAX_QUEUED = 5000;
 const CURSOR_INTERVAL_MS = 40;
@@ -70,6 +69,8 @@ const DEFAULT_VIEW: View = { x: 0, y: 0, zoom: 1 };
 const LOCAL_KEY = "drawapp:board";
 // A solo drawing handed to a freshly created room, read once on its first load.
 const SEED_PREFIX = "drawapp:seed:";
+// Whether the tool rail is collapsed; per-viewer, like the grid.
+const TOOLS_KEY = "drawapp:tools-collapsed";
 // Grid style is a per-viewer preference, shared by the solo board and rooms.
 const GRID_KEY = "drawapp:grid";
 
@@ -146,6 +147,7 @@ function fitView(elements: Iterable<DrawElement>, width: number, height: number)
 type Dialog =
   | { kind: "rooms" }
   | { kind: "clear" }
+  | { kind: "privacy" }
   | { kind: "login"; title: string; message: string; next: string }
   | { kind: "auth"; mode: AuthMode; next: string; error?: string };
 
@@ -160,7 +162,7 @@ export default function Whiteboard({
   initialAuth?: InitialAuth;
 }) {
   const router = useRouter();
-  const { user: account, loading: authLoading } = useAuth();
+  const { user: account, loading: authLoading, refreshSession } = useAuth();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const elements = useRef(new Map<string, DrawElement>());
   const preview = useRef<ShapeElement | null>(null);
@@ -183,6 +185,7 @@ export default function Whiteboard({
   const [color, setColor] = useState(COLORS[0]);
   const [size, setSize] = useState(DEFAULT_SIZE);
   const [font, setFont] = useState<TextFont>("sans");
+  const [toolsCollapsed, setToolsCollapsed] = useState(false);
   const [grid, setGridState] = useState<GridMode>("lines");
   const gridRef = useRef<GridMode>("lines");
   const [spaceHeld, setSpaceHeld] = useState(false);
@@ -278,6 +281,7 @@ export default function Whiteboard({
   // Restore the grid preference, and redraw once the text fonts have downloaded.
   useEffect(() => {
     try {
+      setToolsCollapsed(localStorage.getItem(TOOLS_KEY) === "1");
       const saved = localStorage.getItem(GRID_KEY);
       if (saved === "lines" || saved === "dots" || saved === "off") {
         gridRef.current = saved;
@@ -973,6 +977,54 @@ export default function Whiteboard({
     router.push(path);
   };
 
+  const handleSignOut = async () => {
+    try {
+      await api.signOut();
+    } finally {
+      await refreshSession();
+    }
+  };
+
+  const toggleTools = () => {
+    setToolsCollapsed((collapsed) => {
+      try {
+        localStorage.setItem(TOOLS_KEY, collapsed ? "0" : "1");
+      } catch {
+        // Not remembered; harmless.
+      }
+      return !collapsed;
+    });
+  };
+
+  // Room: its code and a copy-invite button. Solo board: the way into a room.
+  const shareChip = room ? (
+    <div className={cn(PANEL, "flex h-10 items-center rounded-xl")}>
+      <span
+        className="px-3 font-mono text-sm font-semibold tracking-[0.15em] sm:tracking-[0.2em]"
+        title="Room code"
+      >
+        {room.roomId}
+      </span>
+      <button
+        onClick={handleCopyLink}
+        title="Copy invite link"
+        className="flex h-full items-center gap-1.5 rounded-r-xl border-l px-3 text-sm font-medium text-primary transition hover:bg-primary/10"
+      >
+        {copied ? <Check className="size-4 text-green-600" /> : <Link2 className="size-4" />}
+        <span className="hidden sm:inline">{copied ? "Copied!" : "Copy link"}</span>
+      </button>
+    </div>
+  ) : (
+    <button
+      onClick={() => setDialog({ kind: "rooms" })}
+      title="Start or join a live room"
+      className="pointer-events-auto inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-3.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/30 transition hover:bg-primary/90"
+    >
+      <Users className="size-4" />
+      <span className="hidden sm:inline">Draw together</span>
+    </button>
+  );
+
   const draftAt = textDraft ? toScreen(view, textDraft.at) : null;
   const panReady = tool === "hand" || spaceHeld;
 
@@ -1042,89 +1094,45 @@ export default function Whiteboard({
         )}
       </div>
 
-      {/* Top bar */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
-        <div className={cn(PANEL, "flex min-w-0 items-center rounded-xl")}>
-          <Link
-            href="/"
-            title="DrawApp"
-            className="flex shrink-0 items-center gap-2 px-2.5 py-1.5 font-semibold transition hover:opacity-80"
-          >
-            <Image src={paintBrush} alt="" width={24} height={24} />
-            <span className={cn("font-display text-2xl font-bold leading-none", room && "hidden lg:inline")}>DrawApp</span>
-          </Link>
-          {room ? (
-            <>
-              <span className="border-l px-3 py-1.5 font-mono text-sm font-semibold tracking-[0.15em] sm:tracking-[0.2em]">
-                {room.roomId}
-              </span>
-              <button
-                onClick={handleCopyLink}
-                title="Copy invite link"
-                className="flex items-center gap-1.5 rounded-r-xl border-l px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
-              >
-                {copied ? <Check className="size-4 text-green-600" /> : <Link2 className="size-4" />}
-                <span className="hidden sm:inline">{copied ? "Copied" : "Invite"}</span>
-              </button>
-            </>
-          ) : (
-            <span
-              className="hidden border-l px-3 py-1.5 text-xs text-muted-foreground sm:inline"
-              title="Your solo board is saved in this browser"
-            >
-              Saved in this browser
-            </span>
-          )}
-        </div>
+      {/* Top left: brand, plus the share chip on smaller screens */}
+      <div className="pointer-events-none absolute left-3 top-3 flex items-center gap-2">
+        <Link
+          href="/"
+          title="DrawApp"
+          className={cn(PANEL, "flex h-10 shrink-0 items-center gap-2 rounded-xl px-2.5 transition hover:opacity-90")}
+        >
+          <Image src={paintBrush} alt="" width={24} height={24} />
+          <span className="hidden font-display text-2xl font-bold leading-none sm:inline">DrawApp</span>
+        </Link>
+        <div className="lg:hidden">{shareChip}</div>
+      </div>
 
-        <div className="pointer-events-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
-          {room ? (
-            <>
-              <PrivacyButton roomId={room.roomId} isOwner={room.isOwner} isPrivate={room.isPrivate} />
-              <PeopleMenu members={members} fallbackCount={peers} me={room.user} />
-              <StatusBadge status={status} />
-              <ThemeToggle className="glass rounded-xl border" />
-              <button
-                onClick={() => router.push("/")}
-                className="glass inline-flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50/80 sm:px-3 dark:text-red-400 dark:hover:bg-red-950/40"
-              >
-                <LogOut className="size-4" />
-                <span className="hidden sm:inline">Leave</span>
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => setDialog({ kind: "rooms" })}
-                title="Start or join a live room"
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/25 transition hover:bg-primary/90"
-              >
-                <Users className="size-4" />
-                <span className="hidden sm:inline">Draw together</span>
-              </button>
-              <ThemeToggle className="glass rounded-xl border" />
-              {account ? (
-                <div className="glass rounded-full border">
-                  <UserMenu user={account} />
-                </div>
-              ) : (
-                !authLoading && (
-                  <button
-                    onClick={() => setDialog({ kind: "auth", mode: "signin", next: "/" })}
-                    className="glass inline-flex h-9 items-center rounded-xl border px-3 text-sm font-medium transition hover:bg-white/80 dark:hover:bg-white/10"
-                  >
-                    Sign in
-                  </button>
-                )
-              )}
-            </>
-          )}
-        </div>
+      {/* Top right: who's here, and the menu */}
+      <div className="pointer-events-auto absolute right-3 top-3 flex items-center gap-2">
+        {room && <PeopleMenu members={members} fallbackCount={peers} me={room.user} status={status} />}
+        {!authLoading && (
+          <BoardMenu
+            account={account}
+            room={room}
+            onPrivacy={() => setDialog({ kind: "privacy" })}
+            onLeave={() => router.push("/")}
+            onDrawTogether={() => setDialog({ kind: "rooms" })}
+            onSignIn={() => setDialog({ kind: "auth", mode: "signin", next: "/" })}
+            onSignOut={handleSignOut}
+            onDownload={handleDownload}
+            onClear={handleClear}
+          />
+        )}
       </div>
 
       {/* Tools: left rail on larger screens */}
       <div className="pointer-events-none absolute left-3 top-1/2 hidden -translate-y-1/2 md:block">
-        <ToolRail tool={tool} onToolChange={setTool} />
+        <ToolRail
+          tool={tool}
+          onToolChange={setTool}
+          collapsed={toolsCollapsed}
+          onToggleCollapsed={toggleTools}
+        />
       </div>
 
       {/* Bottom bar(s); on phones the tools sit here too */}
@@ -1142,11 +1150,18 @@ export default function Whiteboard({
           canRedo={history.redo > 0}
           onUndo={undo}
           onRedo={redo}
-          onDownload={handleDownload}
-          onClear={handleClear}
         />
-        <ToolRail tool={tool} onToolChange={setTool} className="md:hidden" />
+        <ToolRail
+          tool={tool}
+          onToolChange={setTool}
+          collapsed={toolsCollapsed}
+          onToggleCollapsed={toggleTools}
+          className="md:hidden"
+        />
       </div>
+
+      {/* Bottom right on large screens: share */}
+      <div className="absolute bottom-3 right-3 hidden lg:block">{shareChip}</div>
 
       <ZoomControls
         zoom={view.zoom}
@@ -1167,6 +1182,9 @@ export default function Whiteboard({
         </div>
       )}
 
+      {dialog?.kind === "privacy" && room && (
+        <PrivacyDialog roomId={room.roomId} isPrivate={room.isPrivate} onClose={closeDialog} />
+      )}
       {dialog?.kind === "clear" && (
         <ConfirmDialog
           title={room ? "Clear for everyone?" : "Clear your board?"}

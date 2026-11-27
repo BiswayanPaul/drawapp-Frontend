@@ -6,53 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GlassDialog } from "@/components/ui/glass-dialog";
 import { FormError } from "@/components/auth/form-error";
-import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 
-export function PrivacyButton({
-  roomId,
-  isOwner,
-  isPrivate,
-}: {
-  roomId: string;
-  isOwner: boolean;
-  isPrivate: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const Icon = isPrivate ? Lock : Globe;
-  const label = isPrivate ? "Private" : "Public";
-
-  const className =
-    "glass inline-flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-sm text-muted-foreground transition sm:px-3";
-
-  if (!isOwner) {
-    // Visitors only see the state; there's nothing for them to change.
-    return isPrivate ? (
-      <span className={className} title="Private room">
-        <Lock className="size-4" />
-        <span className="hidden md:inline">{label}</span>
-      </span>
-    ) : null;
-  }
-
-  return (
-    <>
-      <button
-        onClick={() => setOpen(true)}
-        title="Room privacy"
-        className={cn(className, "hover:bg-white/80 hover:text-foreground dark:hover:bg-white/10")}
-      >
-        <Icon className="size-4" />
-        <span className="hidden md:inline">{label}</span>
-      </button>
-      {open && (
-        <PrivacyDialog roomId={roomId} isPrivate={isPrivate} onClose={() => setOpen(false)} />
-      )}
-    </>
-  );
-}
-
-function PrivacyDialog({
+// Owner-only: set, change or remove the room password. Opened from the board menu.
+export function PrivacyDialog({
   roomId,
   isPrivate,
   onClose,

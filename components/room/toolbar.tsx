@@ -3,7 +3,8 @@
 import {
   ArrowUpRight,
   Circle,
-  Download,
+  ChevronsLeft,
+  ChevronsRight,
   Eraser,
   Hand,
   Highlighter,
@@ -13,7 +14,6 @@ import {
   Plus,
   Redo2,
   Square,
-  Trash2,
   Type,
   Undo2,
   Check,
@@ -64,15 +64,21 @@ export const TOOLS: { tool: Tool; label: string; key: string; icon: typeof Penci
 export const PANEL = "glass pointer-events-auto rounded-2xl border";
 
 // Tools: a vertical rail on the left on larger screens, a horizontal strip on phones.
+// Collapsed, it shrinks to just the active tool; shortcuts keep working either way.
 export function ToolRail({
   tool,
   onToolChange,
+  collapsed,
+  onToggleCollapsed,
   className,
 }: {
   tool: Tool;
   onToolChange: (tool: Tool) => void;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   className?: string;
 }) {
+  const visible = collapsed ? TOOLS.filter((t) => t.tool === tool).slice(0, 1) : TOOLS;
   return (
     <div
       role="toolbar"
@@ -83,9 +89,9 @@ export function ToolRail({
         className
       )}
     >
-      {TOOLS.map(({ tool: t, label, key, icon: Icon }, i) => (
+      {visible.map(({ tool: t, label, key, icon: Icon }, i) => (
         <span key={t} className="contents">
-          {i === 1 && <Divider className="md:mx-0 md:my-0.5 md:h-px md:w-6" />}
+          {!collapsed && i === 1 && <Divider className="md:mx-0 md:my-0.5 md:h-px md:w-6" />}
           <ToolButton
             label={`${label} (${key.toUpperCase()})`}
             active={tool === t}
@@ -95,6 +101,13 @@ export function ToolRail({
           </ToolButton>
         </span>
       ))}
+      <Divider className="md:mx-0 md:my-0.5 md:h-px md:w-6" />
+      <ToolButton
+        label={collapsed ? "Show all tools" : "Hide tools"}
+        onClick={onToggleCollapsed}
+      >
+        {collapsed ? <ChevronsRight className="size-4" /> : <ChevronsLeft className="size-4" />}
+      </ToolButton>
     </div>
   );
 }
@@ -112,8 +125,6 @@ type StyleBarProps = {
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
-  onDownload: () => void;
-  onClear: () => void;
   className?: string;
 };
 
@@ -131,8 +142,6 @@ export function StyleBar({
   canRedo,
   onUndo,
   onRedo,
-  onDownload,
-  onClear,
   className,
 }: StyleBarProps) {
   const pickColor = (c: string) => {
@@ -202,12 +211,6 @@ export function StyleBar({
         </ToolButton>
         <ToolButton label="Redo (Ctrl+Shift+Z)" onClick={onRedo} disabled={!canRedo}>
           <Redo2 className="size-[18px]" />
-        </ToolButton>
-        <ToolButton label="Download PNG" onClick={onDownload}>
-          <Download className="size-[18px]" />
-        </ToolButton>
-        <ToolButton label="Clear board" onClick={onClear} danger>
-          <Trash2 className="size-[18px]" />
         </ToolButton>
       </div>
     </div>
